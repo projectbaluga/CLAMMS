@@ -1,13 +1,42 @@
 # CLAMMS
-Computer Laboratory Asset & Maintenance Management System
+**Computer Laboratory Asset & Maintenance Management System**
 
-A PHP 8.1+ / MySQL starter application for managing six computer laboratories, assets, custodianship, maintenance records, and device heartbeats.
+PHP 8.1+ and MySQL starter application for a school with six computer laboratories and one custodian.
 
-## Setup
-1. Create a MySQL database and import `database/clamms.sql`.
-2. Set database credentials and `APP_URL` in `config/config.php`.
-3. Configure your web server document root to the `public/` directory.
-4. Set a unique `HEARTBEAT_SECRET` in the config and use it in device heartbeat requests.
-5. Create an administrator account using your own secure password hash and insert it into the `users` table.
+## Included modules
+- Dashboard with lab inventory counts and maintenance summary
+- Six seeded laboratory records; editable room names and expected computer counts
+- Asset registration, editing, filtering, categories, and condition status
+- Maintenance issue reporting, action notes, and resolution tracking
+- Automatic device heartbeat receiver and recent-heartbeat view
+- Manual equipment inspection logging
+- User login, password hashing, CSRF validation on management forms, and audit log helper
 
-Use HTTPS, a dedicated least-privilege database account, and change all sample secrets before deployment. This is a starter implementation; test and harden it before production use.
+## Installation
+1. Use PHP 8.1+ with PDO MySQL enabled, MySQL 8+, and Apache or another PHP web server.
+2. Create/import the database: run `database/clamms.sql` in MySQL.
+3. Edit `config/config.php`: set `APP_URL` to the public URL of the `public` folder, and set database name, user, password, and a long random `HEARTBEAT_SECRET`.
+4. Create a database user with only the required privileges on `clamms_db`.
+5. Point the web server document root to this repository's `public/` folder. Do not expose `config/`, `includes/`, `database/`, or `scripts/` directly.
+6. Create the first administrator from the project root using CLI:
+   `php scripts/create_admin.php "System Administrator" admin "Use-A-Unique-Password-At-Least-12-Chars"`
+   Use a unique password and do not reuse the example.
+7. Open `APP_URL` in a browser and sign in.
+
+## Device heartbeat
+Send an HTTPS POST request to `/api/heartbeat.php` with JSON such as:
+```json
+{"asset_tag":"CL1-PC001","hostname":"CL1-PC001"}
+```
+Include the header `X-CLAMMS-SECRET: <the configured HEARTBEAT_SECRET>`. Register the asset tag in the inventory first. The endpoint records the time and source IP. A small Windows scheduled-task agent still needs to be installed/configured on each lab PC to send heartbeats automatically.
+
+## Monitoring interpretation
+The monitoring screen labels a device "recently seen" if its last heartbeat was within five minutes. A missing heartbeat can mean the PC is off, disconnected, blocked by a firewall, or its agent is not running; it is not definitive proof of failure. Manual inspection records are separate from automatic heartbeat logs.
+
+## Deployment and security notes
+- Deploy behind HTTPS only; change all sample credentials and secrets.
+- Restrict the database account and server file permissions.
+- Back up the database regularly.
+- Configure PHP error logging and disable public error display.
+- Review roles/permissions before multi-user deployment. The starter currently uses a simple authenticated-user access model.
+- This is a starter release, not yet a fully tested production deployment. Test on a staging server and arrange a security review before using it for official school records.

@@ -28,7 +28,7 @@ Send an HTTPS POST request to `/api/heartbeat.php` with JSON such as:
 ```json
 {"asset_tag":"CL1-PC001","hostname":"CL1-PC001"}
 ```
-Include the header `X-CLAMMS-SECRET: <the configured HEARTBEAT_SECRET>`. Register the asset tag in the inventory first. The endpoint records the time and source IP. A small Windows scheduled-task agent still needs to be installed/configured on each lab PC to send heartbeats automatically.
+Include the header `X-CLAMMS-SECRET: <the configured HEARTBEAT_SECRET>`. Register the asset tag in the inventory first. The endpoint records the time and source IP. A Windows PowerShell heartbeat client is provided at `scripts/windows/clamms-heartbeat.ps1`. Copy it to each lab PC and run it continuously using a dedicated restricted account. Example: `powershell.exe -ExecutionPolicy Bypass -File .\\clamms-heartbeat.ps1 -ServerUrl https://school.example.edu -AssetTag CL1-PC001 -SharedSecret YOUR_LONG_SECRET`. Configure Task Scheduler to start it at system startup and restart it on failure. Protect the shared secret; for larger deployments, consider per-device credentials and regular secret rotation.
 
 ## Monitoring interpretation
 The monitoring screen labels a device "recently seen" if its last heartbeat was within five minutes. A missing heartbeat can mean the PC is off, disconnected, blocked by a firewall, or its agent is not running; it is not definitive proof of failure. Manual inspection records are separate from automatic heartbeat logs.

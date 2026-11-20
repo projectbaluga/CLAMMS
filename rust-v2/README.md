@@ -4,7 +4,8 @@ Rust-based Windows-hosted rebuild of the Computer Laboratory Asset & Maintenance
 
 ## Deployment architecture
 
-- The laboratory custodian's Windows PC hosts `clamms-server.exe`.
+- The laboratory custodian's Windows PC hosts `clamms-server.exe` and the local SQLite database.
+- Each workstation runs the separate `clamms-agent.exe` process built from `agent/`.
 - The server stores data in a local SQLite database at `data/clamms.db`.
 - Users access the dashboard through a browser over the school LAN.
 - Remote users connect through an approved VPN (for example, Tailscale or WireGuard).
@@ -50,10 +51,12 @@ This branch is an actively developed Rust V2 implementation and is not yet a pro
 - Asset create/update APIs with status validation (administrator and custodian); use status `retired` rather than hard-deleting inventory
 - Maintenance list/create/update APIs (administrator, custodian and technician)
 - Administrator-only user listing, creation, role changes, activation/deactivation and password reset; password changes revoke that user's active sessions
+- Browser dashboard at `/` with login, inventory, laboratory, maintenance, monitoring-history and administrator user views
+- Separate Rust Windows monitoring agent under `agent/`, configured per workstation with its asset tag and server secret
 - Audit trail table for management operations
 - Windows CI workflow for formatting, checking, linting and tests
 
-Still outstanding: user administration/password reset, a complete browser dashboard and forms, agent executable, reports/exports, backup/restore workflow, stronger audit attribution, CSRF strategy if cookie auth is introduced, rate limiting, session revocation/expiry cleanup, automated API/database tests, and deployment hardening. Role checks currently distinguish inventory and maintenance writes; they are not yet a complete school-specific authorization policy. Do not use this build for production or irreplaceable asset data until the outstanding controls and successful Windows build/test validation are complete.
+Still outstanding: report/export generation, tested backup/restore workflow, stronger audit attribution, rate limiting, session expiry cleanup, automated API/database integration tests, installer/service packaging, and deployment hardening. Dashboard forms and agent are implemented but still need real Windows build and pilot validation. Role checks currently distinguish inventory and maintenance writes; they are not yet a complete school-specific authorization policy. Do not use this build for production or irreplaceable asset data until the outstanding controls and successful Windows build/test validation are complete.
 
 ## API routes currently implemented
 
@@ -73,6 +76,7 @@ All routes below except health and heartbeat require a bearer token where noted.
 | PUT | `/api/maintenance/:id` | Administrator, custodian or technician |
 | GET / POST | `/api/users` | Administrator only |
 | PUT | `/api/users/:id` | Administrator only |
+| GET | `/api/monitoring` | Authenticated |
 | POST | `/api/heartbeat` | Shared agent secret |
 
 Send `Authorization: Bearer <token>` for authenticated routes. The login response returns the token once; keep it private. The heartbeat endpoint uses `X-CLAMMS-SECRET`, not a user session.
@@ -107,3 +111,21 @@ X-CLAMMS-SECRET: <same secret configured on server and agent>
 - Configure Windows Firewall to allow port 8080 only from trusted LAN/VPN networks.
 - Remote access should be through VPN, not direct port forwarding.
 - The server and agent binaries have not yet been built or tested on a Windows host.
+
+## Browser dashboard
+
+Open `http://127.0.0.1:8080/` and sign in using the administrator account configured during bootstrap. The dashboard provides read views and role-gated create/update forms for assets, laboratories, maintenance records, and users. The monitoring tab displays received heartbeat history. It currently does not provide CSV/PDF exports or a full alerting workflow.
+
+## Build the workstation agent
+
+From PowerShell:
+
+```powershell
+cd agent
+Copy-Item .env.example .env
+# Edit .env: server URL, matching agent secret, and the workstation's exact asset tag.
+cargo build --release
+.\target\release\clamms-agent.exe
+```
+
+Pilot on one workstation first. Create its asset record in the dashboard before configuring the agent. Then verify that new entries appear in Monitoring. Deploy to the other workstations only after validating network reachability, telemetry and Windows startup behavior.

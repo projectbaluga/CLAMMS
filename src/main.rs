@@ -1299,6 +1299,10 @@ mod tests {
             .connect("sqlite::memory:")
             .await
             .expect("in-memory database");
+        test_state_with_db(db).await
+    }
+
+    async fn test_state_with_db(db: SqlitePool) -> AppState {
         sqlx::migrate!("./migrations")
             .run(&db)
             .await
@@ -1621,7 +1625,19 @@ mod tests {
 
     #[tokio::test]
     async fn database_backup_is_admin_only_and_contains_sqlite_data() {
-        let state = test_state().await;
+        // VACUUM INTO is a file-to-file operation; exercise it against the same
+        // file-backed SQLite configuration used by the running application.
+        let database_path = env::temp_dir().join(format!("clamms-test-{}.db", Uuid::new_v4()));
+        let options = SqliteConnectOptions::new()
+            .filename(&database_path)
+            .create_if_missing(true)
+            .foreign_keys(true);
+        let db = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(options)
+            .await
+            .expect("file-backed test database");
+        let state = test_state_with_db(db).await;
         let admin = login_headers(&state, "admin-test").await;
         let viewer = login_headers(&state, "viewer-test").await;
 
@@ -1646,6 +1662,9 @@ mod tests {
             .expect("read backup response body");
         assert!(bytes.starts_with(b"SQLite format 3\0"));
         assert!(bytes.len() > 100);
+
+        state.db.close().await;
+        let _ = std::fs::remove_file(&database_path);
     }
 
     #[test]

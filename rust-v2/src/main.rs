@@ -118,8 +118,6 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/monitoring", get(list_monitoring))
         .route("/api/reports/assets.csv", get(export_assets_csv))
         .route("/api/reports/maintenance.csv", get(export_maintenance_csv))
-        .route("/api/reports/assets.csv", get(export_assets_csv))
-        .route("/api/reports/maintenance.csv", get(export_maintenance_csv))
         .route("/api/users", get(list_users).post(create_user))
         .route("/api/users/:id", put(update_user))
         .route("/api/heartbeat", post(heartbeat))

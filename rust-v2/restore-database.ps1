@@ -14,7 +14,10 @@ if (-not (Test-Path $BackupPath)) { throw "Backup file not found: $BackupPath" }
 & $exe --check-db $BackupPath
 if ($LASTEXITCODE -ne 0) { throw "Selected backup failed SQLite integrity validation. Live database was not changed." }
 
-$wasRunning = (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue).State -eq "Running"
+$task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+$wasRunning = $null -ne $task -and $task.State -eq "Running"
+$serverProcess = Get-Process -Name "clamms-server" -ErrorAction SilentlyContinue
+if ($null -ne $serverProcess -and -not $wasRunning) { throw "Server process is running outside the expected scheduled task; stop it before restoring." }
 if ($wasRunning) {
     Stop-ScheduledTask -TaskName $TaskName
     $deadline = (Get-Date).AddSeconds(30)

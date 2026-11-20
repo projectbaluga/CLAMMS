@@ -29,23 +29,30 @@ async fn main() -> Result<()> {
     }
     dotenvy::dotenv().ok();
     tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::try_from_default_env()
-            .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")))
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+        )
         .init();
 
     let server = env::var("CLAMMS_SERVER_URL")
         .context("CLAMMS_SERVER_URL is required")?
         .trim_end_matches('/')
         .to_string();
-    let secret = env::var("CLAMMS_AGENT_SECRET")
-        .context("CLAMMS_AGENT_SECRET is required")?;
-    let asset_tag = env::var("CLAMMS_ASSET_TAG")
-        .context("CLAMMS_ASSET_TAG is required")?;
+    let secret = env::var("CLAMMS_AGENT_SECRET").context("CLAMMS_AGENT_SECRET is required")?;
+    let asset_tag = env::var("CLAMMS_ASSET_TAG").context("CLAMMS_ASSET_TAG is required")?;
     let interval = env::var("CLAMMS_INTERVAL_SECONDS")
-        .unwrap_or_else(|_| "60".to_string()).parse::<u64>()?;
-    if secret.len() < 32 { bail!("CLAMMS_AGENT_SECRET must be at least 32 characters"); }
-    if asset_tag.trim().is_empty() { bail!("CLAMMS_ASSET_TAG cannot be empty"); }
-    if !(15..=3600).contains(&interval) { bail!("CLAMMS_INTERVAL_SECONDS must be between 15 and 3600"); }
+        .unwrap_or_else(|_| "60".to_string())
+        .parse::<u64>()?;
+    if secret.len() < 32 {
+        bail!("CLAMMS_AGENT_SECRET must be at least 32 characters");
+    }
+    if asset_tag.trim().is_empty() {
+        bail!("CLAMMS_ASSET_TAG cannot be empty");
+    }
+    if !(15..=3600).contains(&interval) {
+        bail!("CLAMMS_INTERVAL_SECONDS must be between 15 and 3600");
+    }
 
     let client = Client::builder()
         .timeout(Duration::from_secs(15))

@@ -109,7 +109,6 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/auth/login", post(login))
         .route("/api/auth/me", get(me))
         .route("/api/auth/logout", post(logout))
-        .route("/api/laboratories", get(list_laboratories))
         .route("/api/assets", get(list_assets).post(create_asset))
         .route("/api/assets/:id", put(update_asset))
         .route("/api/laboratories", get(list_laboratories).post(create_laboratory))
@@ -439,8 +438,7 @@ async fn update_maintenance(
     if id<=0 || input.asset_id<=0 || issue.is_empty() || issue.len()>4000 || !valid_maintenance_status(status) {
         return Err(api_error(StatusCode::BAD_REQUEST,"Maintenance details are invalid"));
     }
-    let resolved=if status=="resolved" { Some("CURRENT_TIMESTAMP") } else { None };
-    let r=if resolved.is_some() {
+    let r=if status=="resolved" {
         sqlx::query("UPDATE maintenance_logs SET asset_id=?,issue=?,action_taken=?,status=?,resolved_at=CURRENT_TIMESTAMP WHERE id=?")
             .bind(input.asset_id).bind(issue).bind(input.action_taken).bind(status).bind(id).execute(&state.db).await
     } else {

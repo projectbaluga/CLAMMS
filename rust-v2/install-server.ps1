@@ -6,6 +6,8 @@ if (-not (Test-Path $exe)) { throw "clamms-server.exe not found. Build the serve
 New-Item -ItemType Directory -Force -Path $InstallPath | Out-Null
 Copy-Item $exe (Join-Path $InstallPath "clamms-server.exe") -Force
 New-Item -ItemType Directory -Force -Path (Join-Path $InstallPath "data") | Out-Null
+& icacls.exe $InstallPath /inheritance:r /grant:r "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F" | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "Could not secure server directory permissions." }
 $sourceEnv = Join-Path $PSScriptRoot ".env"
 $targetEnv = Join-Path $InstallPath ".env"
 if (-not (Test-Path $targetEnv)) {

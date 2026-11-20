@@ -2,6 +2,7 @@ param([string]$InstallPath = "$env:ProgramData\CLAMMS\Agent", [string]$TaskName 
 $ErrorActionPreference = "Stop"
 if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw "Run elevated PowerShell." }
 $exe = Join-Path $PSScriptRoot "target\release\clamms-agent.exe"
+if (-not (Test-Path $exe)) { $exe = Join-Path $PSScriptRoot "clamms-agent.exe" }
 if (-not (Test-Path $exe)) { throw "clamms-agent.exe not found. Build the agent first." }
 New-Item -ItemType Directory -Force -Path $InstallPath | Out-Null
 & icacls.exe $InstallPath /inheritance:r /grant:r "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F" | Out-Null

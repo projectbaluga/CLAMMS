@@ -563,3 +563,43 @@ async fn heartbeat(
     }
     Ok((StatusCode::ACCEPTED, Json(ApiMessage { status: "ok", message: "Heartbeat received" })))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn role_permissions_are_restricted() {
+        assert!(can_manage_inventory("administrator"));
+        assert!(can_manage_inventory("custodian"));
+        assert!(!can_manage_inventory("technician"));
+        assert!(!can_manage_inventory("viewer"));
+        assert!(can_manage_maintenance("technician"));
+        assert!(!can_manage_maintenance("viewer"));
+    }
+
+    #[test]
+    fn asset_status_values_are_allowlisted() {
+        for status in ["working", "needs_repair", "under_maintenance", "retired", "missing"] {
+            assert!(valid_asset_status(status));
+        }
+        assert!(!valid_asset_status("deleted"));
+        assert!(!valid_asset_status("unknown"));
+    }
+
+    #[test]
+    fn maintenance_status_values_are_allowlisted() {
+        for status in ["open", "in_progress", "resolved", "cancelled"] {
+            assert!(valid_maintenance_status(status));
+        }
+        assert!(!valid_maintenance_status("closed"));
+    }
+
+    #[test]
+    fn user_roles_are_allowlisted() {
+        for role in ["administrator", "custodian", "technician", "viewer"] {
+            assert!(valid_role(role));
+        }
+        assert!(!valid_role("superuser"));
+    }
+}

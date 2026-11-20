@@ -12,6 +12,10 @@ on:
       - 'rust-v2/**'
       - '.github/workflows/clamms-rust-v2.yml'
 
+concurrency:
+  group: clamms-rust-v2-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   windows-check:
     runs-on: windows-latest

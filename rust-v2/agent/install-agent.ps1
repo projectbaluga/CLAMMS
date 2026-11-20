@@ -4,6 +4,8 @@ if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
 $exe = Join-Path $PSScriptRoot "target\release\clamms-agent.exe"
 if (-not (Test-Path $exe)) { throw "clamms-agent.exe not found. Build the agent first." }
 New-Item -ItemType Directory -Force -Path $InstallPath | Out-Null
+& icacls.exe $InstallPath /inheritance:r /grant:r "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F" | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "Could not secure agent directory permissions." }
 Copy-Item $exe (Join-Path $InstallPath "clamms-agent.exe") -Force
 $sourceEnv = Join-Path $PSScriptRoot ".env"
 $targetEnv = Join-Path $InstallPath ".env"

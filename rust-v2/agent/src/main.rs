@@ -19,6 +19,14 @@ struct Heartbeat {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            let env_file = dir.join(".env");
+            if env_file.exists() {
+                dotenvy::from_path(env_file).ok();
+            }
+        }
+    }
     dotenvy::dotenv().ok();
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::try_from_default_env()

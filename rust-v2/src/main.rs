@@ -115,6 +115,8 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/laboratories/:id", put(update_laboratory))
         .route("/api/maintenance", get(list_maintenance).post(create_maintenance))
         .route("/api/maintenance/:id", put(update_maintenance))
+        .route("/api/users", get(list_users).post(create_user))
+        .route("/api/users/:id", put(update_user))
         .route("/api/heartbeat", post(heartbeat))
         .with_state(state)
         .layer(TraceLayer::new_for_http());
@@ -271,6 +273,90 @@ async fn list_assets(
     Ok(Json(rows))
 }
 
+
+
+#[derive(Deserialize)]
+struct UserInput {
+    full_name: String,
+    username: String,
+    role: String,
+    password: Option<String>,
+    is_active: Option<bool>,
+}
+
+fn valid_role(role: &str) -> bool {
+    matches!(role, "administrator" | "custodian" | "technician" | "viewer")
+}
+
+fn password_hash(password: &str) -> Result<String, (StatusCode, Json<ApiMessage>)> {
+    if password.len() < 12 || password.len() > 1024 {
+        return Err(api_error(StatusCode::BAD_REQUEST, "Password must be 12 to 1024 bytes long"));
+    }
+    let salt = SaltString::encode_b64(Uuid::new_v4().as_bytes())
+        .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Could not prepare password hash"))?;
+    Argon2::default().hash_password(password.as_bytes(), &salt)
+        .map(|hash| hash.to_string())
+        .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Could not hash password"))
+}
+
+async fn list_users(
+    State(state): State<AppState>, headers: HeaderMap,
+) -> Result<Json<Vec<(i64,String,String,String,i64)>>,(StatusCode,Json<ApiMessage>)> {
+    let user=authenticated_user(&state.db,&headers).await?;
+    if user.role!="administrator" { return Err(api_error(StatusCode::FORBIDDEN,"Administrator role required")); }
+    let rows=sqlx::query_as::<_,(i64,String,String,String,i64)>(
+        "SELECT id,full_name,username,role,is_active FROM users ORDER BY full_name"
+    ).fetch_all(&state.db).await
+        .map_err(|_|api_error(StatusCode::INTERNAL_SERVER_ERROR,"Could not load users"))?;
+    Ok(Json(rows))
+}
+
+async fn create_user(
+    State(state): State<AppState>, headers: HeaderMap, Json(input): Json<UserInput>,
+) -> Result<(StatusCode,Json<ApiMessage>),(StatusCode,Json<ApiMessage>)> {
+    let user=authenticated_user(&state.db,&headers).await?;
+    if user.role!="administrator" { return Err(api_error(StatusCode::FORBIDDEN,"Administrator role required")); }
+    let full=input.full_name.trim(); let username=input.username.trim();
+    if full.is_empty() || full.len()>150 || username.is_empty() || username.len()>80 || !valid_role(&input.role) {
+        return Err(api_error(StatusCode::BAD_REQUEST,"User details or role are invalid"));
+    }
+    let password=input.password.as_deref().ok_or_else(||api_error(StatusCode::BAD_REQUEST,"Initial password is required"))?;
+    let hash=password_hash(password)?;
+    let r=sqlx::query("INSERT INTO users (full_name,username,password_hash,role,is_active) VALUES (?,?,?,?,?)")
+        .bind(full).bind(username).bind(hash).bind(&input.role).bind(input.is_active.unwrap_or(true) as i64)
+        .execute(&state.db).await;
+    match r {
+        Ok(r) => { write_audit(&state.db,"create","user",Some(r.last_insert_rowid()),username).await;
+            Ok((StatusCode::CREATED,Json(ApiMessage{status:"ok",message:"User created"}))) }
+        Err(_) => Err(api_error(StatusCode::CONFLICT,"Username is already in use or user data is invalid")),
+    }
+}
+
+async fn update_user(
+    State(state): State<AppState>, headers: HeaderMap, Path(id): Path<i64>, Json(input): Json<UserInput>,
+) -> Result<Json<ApiMessage>,(StatusCode,Json<ApiMessage>)> {
+    let actor=authenticated_user(&state.db,&headers).await?;
+    if actor.role!="administrator" { return Err(api_error(StatusCode::FORBIDDEN,"Administrator role required")); }
+    let full=input.full_name.trim(); let username=input.username.trim();
+    if id<=0 || full.is_empty() || full.len()>150 || username.is_empty() || username.len()>80 || !valid_role(&input.role) {
+        return Err(api_error(StatusCode::BAD_REQUEST,"User details or role are invalid"));
+    }
+    let active=input.is_active.unwrap_or(true) as i64;
+    if let Some(password)=input.password.as_deref() {
+        let hash=password_hash(password)?;
+        sqlx::query("UPDATE users SET full_name=?,username=?,role=?,is_active=?,password_hash=? WHERE id=?")
+            .bind(full).bind(username).bind(&input.role).bind(active).bind(hash).bind(id)
+            .execute(&state.db).await.map_err(|_|api_error(StatusCode::CONFLICT,"Could not update user; username may be in use"))?;
+        sqlx::query("DELETE FROM sessions WHERE user_id=?").bind(id).execute(&state.db).await
+            .map_err(|_|api_error(StatusCode::INTERNAL_SERVER_ERROR,"User updated but sessions could not be revoked"))?;
+    } else {
+        sqlx::query("UPDATE users SET full_name=?,username=?,role=?,is_active=? WHERE id=?")
+            .bind(full).bind(username).bind(&input.role).bind(active).bind(id)
+            .execute(&state.db).await.map_err(|_|api_error(StatusCode::CONFLICT,"Could not update user; username may be in use"))?;
+    }
+    write_audit(&state.db,"update","user",Some(id),username).await;
+    Ok(Json(ApiMessage{status:"ok",message:"User updated; active sessions revoked when password changed"}))
+}
 
 #[derive(Deserialize)]
 struct LaboratoryInput {

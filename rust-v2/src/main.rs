@@ -6,8 +6,8 @@ use axum::{
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
-use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
-use std::{env, net::SocketAddr, path::Path};
+use sqlx::{sqlite::{SqliteConnectOptions, SqlitePoolOptions}, SqlitePool};
+use std::{env, net::SocketAddr, path::Path, str::FromStr};
 use tower_http::trace::TraceLayer;
 use tracing::{error, info};
 
@@ -36,6 +36,8 @@ struct ApiMessage {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    dotenvy::dotenv().ok();
+
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -64,9 +66,12 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
+    let connect_options = SqliteConnectOptions::from_str(&database_url)?
+        .create_if_missing(true)
+        .foreign_keys(true);
     let db = SqlitePoolOptions::new()
         .max_connections(5)
-        .connect(&database_url)
+        .connect_with(connect_options)
         .await?;
     sqlx::migrate!("./migrations").run(&db).await?;
 

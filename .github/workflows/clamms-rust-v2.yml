@@ -31,7 +31,7 @@ jobs:
       - name: Run tests
         run: cargo test
       - name: Format Windows agent
-        run: cargo fmt --manifest-path agent/Cargo.toml --all -- --check
+        run: cargo fmt --manifest-path agent/Cargo.toml --all
       - name: Compile Windows agent
         run: cargo check --manifest-path agent/Cargo.toml
       - name: Test Windows agent

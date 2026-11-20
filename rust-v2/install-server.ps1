@@ -2,6 +2,7 @@ param([string]$InstallPath = "$env:ProgramData\CLAMMS\Server", [string]$TaskName
 $ErrorActionPreference = "Stop"
 if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw "Run elevated PowerShell." }
 $exe = Join-Path $PSScriptRoot "target\release\clamms-server.exe"
+if (-not (Test-Path $exe)) { $exe = Join-Path $PSScriptRoot "clamms-server.exe" }
 if (-not (Test-Path $exe)) { throw "clamms-server.exe not found. Build the server first." }
 New-Item -ItemType Directory -Force -Path $InstallPath | Out-Null
 Copy-Item $exe (Join-Path $InstallPath "clamms-server.exe") -Force

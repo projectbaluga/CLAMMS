@@ -1,0 +1,32 @@
+name: CLAMMS Rust V2
+
+on:
+  push:
+    branches: [rust-v2]
+    paths:
+      - 'rust-v2/**'
+      - '.github/workflows/clamms-rust-v2.yml'
+  pull_request:
+    branches: [rust-v2]
+    paths:
+      - 'rust-v2/**'
+      - '.github/workflows/clamms-rust-v2.yml'
+
+jobs:
+  windows-check:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: rust-v2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Compile
+        run: cargo check --locked
+      - name: Run tests
+        run: cargo test --locked

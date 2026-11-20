@@ -1102,10 +1102,12 @@ async fn download_database_backup(
         .as_secs();
     let backup_path = backup_dir.join(format!("clamms-{stamp}-{}.db", Uuid::new_v4()));
     let backup_name = backup_path.to_string_lossy().to_string();
-    let result = sqlx::query("VACUUM INTO ?")
-        .bind(&backup_name)
-        .execute(&state.db)
-        .await;
+    // SQLite's VACUUM INTO does not reliably materialize a bound path through
+    // SQLx on Windows. The destination is generated locally (fixed directory
+    // plus UUID), and embedded quotes are escaped before constructing SQL.
+    let escaped_backup_name = backup_name.replace('\'', "''");
+    let vacuum_sql = format!("VACUUM INTO '{escaped_backup_name}'");
+    let result = sqlx::query(&vacuum_sql).execute(&state.db).await;
     if let Err(err) = result {
         error!(
             "Could not create database backup at {}: {err}",
@@ -1120,7 +1122,10 @@ async fn download_database_backup(
     let bytes_result = std::fs::read(&backup_path);
     let _ = std::fs::remove_file(&backup_path);
     let bytes = bytes_result.map_err(|err| {
-        eprintln!("Could not read database backup at {}: {err}", backup_path.display());
+        eprintln!(
+            "Could not read database backup at {}: {err}",
+            backup_path.display()
+        );
         error!(
             "Could not read database backup at {}: {err}",
             backup_path.display()

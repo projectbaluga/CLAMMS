@@ -43,7 +43,7 @@ struct LoginRequest {
     password: String,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 struct ApiMessage {
     status: &'static str,
     message: &'static str,
@@ -57,7 +57,7 @@ struct LoginResponse {
     role: String,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 struct CurrentUser {
     id: i64,
     username: String,

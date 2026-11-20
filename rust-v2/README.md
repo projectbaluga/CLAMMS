@@ -21,7 +21,7 @@ Do not expose port 8080 or the SQLite database directly to the public internet. 
 
 Copy `.env.example` to `.env`, then set `CLAMMS_AGENT_SECRET` to a unique random value of at least 32 characters. Do not commit `.env` or share the secret.
 
-The current initial server reads environment variables directly. For production, run it through a Windows service wrapper or a controlled startup task with the working directory set to this folder.
+The server loads a local `.env` file at startup. To create the first administrator, set `CLAMMS_BOOTSTRAP_ADMIN_USERNAME` and `CLAMMS_BOOTSTRAP_ADMIN_PASSWORD` in `.env`; the password must be at least 12 characters. The bootstrap account is created only when the users table is empty. Remove the bootstrap password from the environment after first startup. For production, run it through a Windows service wrapper or a controlled startup task with the working directory set to this folder.
 
 ## Build and run (PowerShell)
 
@@ -45,7 +45,7 @@ This branch is the initial Rust V2 foundation, not a completed replacement for t
 - Health endpoint at `GET /api/health`
 - Secret-protected heartbeat endpoint at `POST /api/heartbeat`
 
-Not implemented yet: login/session authorization, role enforcement, complete CRUD screens/APIs, agent executable, reporting, backup/restore UI, and VPN provisioning. Do not use this starter build for production or real asset data until those controls and tests are completed.
+Not implemented yet: role-specific authorization policies, user administration, complete CRUD screens/APIs, agent executable, reporting, backup/restore UI, and VPN provisioning. Login sessions are a foundation, not a complete security review. Do not use this starter build for production or real asset data until those controls and tests are completed.
 
 ## Heartbeat request
 

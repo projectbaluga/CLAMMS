@@ -153,18 +153,7 @@ async fn bootstrap_admin(db: &SqlitePool) -> anyhow::Result<()> {
 }
 
 async fn index() -> Html<&'static str> {
-    Html(r#"<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>CLAMMS V2</title><style>
-body{font:16px system-ui;margin:0;background:#f3f6fb;color:#172033}main{max-width:850px;margin:8vh auto;padding:28px}
-section{background:white;border:1px solid #dce3ed;border-radius:14px;padding:24px}
-h1{margin-top:0}code{background:#edf2f8;padding:3px 6px;border-radius:5px}
-</style></head><body><main><section><h1>CLAMMS Rust V2</h1>
-<p>Local Computer Laboratory Asset &amp; Maintenance Management System server.</p>
-<p>Server status: <strong>running</strong></p><p>Health endpoint: <code>/api/health</code></p>
-<p>Authentication API: <code>/api/auth/login</code>, <code>/api/auth/me</code>, <code>/api/auth/logout</code>.</p>
-<p>Initial server foundation. Management APIs are being implemented in stages.</p>
-</section></main></body></html>"#)
+    Html(include_str!("../static/index.html"))
 }
 
 async fn health() -> Json<ApiMessage> {

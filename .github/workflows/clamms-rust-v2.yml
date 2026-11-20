@@ -30,12 +30,16 @@ jobs:
         run: cargo check
       - name: Run tests
         run: cargo test
+      - name: Run Clippy
+        run: cargo clippy --all-targets -- -D warnings
       - name: Format Windows agent
         run: cargo fmt --manifest-path agent/Cargo.toml --all
       - name: Compile Windows agent
         run: cargo check --manifest-path agent/Cargo.toml
       - name: Test Windows agent
         run: cargo test --manifest-path agent/Cargo.toml
+      - name: Run agent Clippy
+        run: cargo clippy --manifest-path agent/Cargo.toml --all-targets -- -D warnings
       - name: Build server executable
         run: cargo build --release
       - name: Build agent executable

@@ -1584,7 +1584,7 @@ mod tests {
         assert_eq!(csv_cell("a\"b"), "\"a\"\"b\"");
         assert_eq!(csv_cell("=1+1"), "\"'=1+1\"");
         assert_eq!(csv_cell("  =1+1"), "\"'  =1+1\"");
-        assert_eq!(csv_cell("\\t=1+1"), "\"'\\t=1+1\"");
+        assert_eq!(csv_cell("\t=1+1"), "\"'\t=1+1\"");
     }
 
     #[test]

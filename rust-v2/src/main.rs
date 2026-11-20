@@ -214,6 +214,9 @@ async fn login(
         return Err(api_error(StatusCode::UNAUTHORIZED, "Invalid username or password"));
     }
 
+    sqlx::query("DELETE FROM sessions WHERE expires_at <= CURRENT_TIMESTAMP")
+        .execute(&state.db).await
+        .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Could not clean expired sessions"))?;
     let token = Uuid::new_v4().to_string() + &Uuid::new_v4().to_string();
     let token_hash = hex::encode(Sha256::digest(token.as_bytes()));
     sqlx::query("INSERT INTO sessions (user_id, token_hash, expires_at) VALUES (?, ?, datetime('now', '+12 hours'))")

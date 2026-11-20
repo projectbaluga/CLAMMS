@@ -122,6 +122,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/users", get(list_users).post(create_user))
         .route("/api/users/:id", put(update_user))
         .route("/api/audit", get(list_audit))
+        .route("/api/admin/backup", get(download_database_backup))
         .route("/api/heartbeat", post(heartbeat))
         .with_state(state)
         .layer(TraceLayer::new_for_http());
@@ -575,6 +576,39 @@ async fn export_maintenance_csv(
         csv.push_str("\r\n");
     }
     Ok(([(header::CONTENT_TYPE,"text/csv; charset=utf-8"),(header::CONTENT_DISPOSITION,"attachment; filename=clamms-maintenance.csv")],csv).into_response())
+}
+
+async fn download_database_backup(
+    State(state): State<AppState>, headers: HeaderMap,
+) -> Result<Response, (StatusCode, Json<ApiMessage>)> {
+    let actor = authenticated_user(&state.db, &headers).await?;
+    if actor.role != "administrator" {
+        return Err(api_error(StatusCode::FORBIDDEN, "Administrator role required"));
+    }
+    let backup_dir = Path::new("data/backups");
+    std::fs::create_dir_all(backup_dir)
+        .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Could not prepare backup directory"))?;
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default().as_secs();
+    let backup_path = backup_dir.join(format!("clamms-{stamp}-{}.db", Uuid::new_v4()));
+    let backup_name = backup_path.to_string_lossy().to_string();
+    let result = sqlx::query("VACUUM INTO ?")
+        .bind(&backup_name)
+        .execute(&state.db).await;
+    if result.is_err() {
+        let _ = std::fs::remove_file(&backup_path);
+        return Err(api_error(StatusCode::INTERNAL_SERVER_ERROR, "Could not create consistent database backup"));
+    }
+    let bytes = std::fs::read(&backup_path)
+        .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Could not read database backup"))?;
+    let _ = std::fs::remove_file(&backup_path);
+    write_audit(&state.db, actor.id, "backup", "database", None, "Database backup downloaded").await;
+    Ok(([
+        (header::CONTENT_TYPE, "application/vnd.sqlite3"),
+        (header::CONTENT_DISPOSITION, "attachment; filename=clamms-backup.db"),
+        (header::CACHE_CONTROL, "no-store"),
+    ], bytes).into_response())
 }
 
 async fn list_audit(

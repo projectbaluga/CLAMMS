@@ -161,4 +161,4 @@ Para sa sunod-sunod na deployment, one-PC pilot, manual inventory checklist, acc
 
 ## Windows CI artifacts
 
-When the `CLAMMS Rust V2` workflow completes successfully, it publishes a `clamms-windows-x64` artifact containing `clamms-server.exe` and `clamms-agent.exe` for 14 days. A green workflow run is required before treating those binaries as usable builds.
+When the `CLAMMS Rust V2` workflow completes successfully, it publishes a `clamms-windows-x64` artifact containing both executables and a `clamms-windows-x64.zip` deployment bundle with environment examples, installer/uninstaller scripts, and backup/restore scripts for 14 days. A green workflow run is required before treating those binaries as usable builds.

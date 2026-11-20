@@ -49,6 +49,7 @@ This branch is an actively developed Rust V2 implementation and is not yet a pro
 - Laboratory create/update APIs (administrator and custodian)
 - Asset create/update APIs with status validation (administrator and custodian); use status `retired` rather than hard-deleting inventory
 - Maintenance list/create/update APIs (administrator, custodian and technician)
+- Administrator-only user listing, creation, role changes, activation/deactivation and password reset; password changes revoke that user's active sessions
 - Audit trail table for management operations
 - Windows CI workflow for formatting, checking, linting and tests
 
@@ -70,11 +71,13 @@ All routes below except health and heartbeat require a bearer token where noted.
 | PUT | `/api/assets/:id` | Administrator or custodian |
 | GET / POST | `/api/maintenance` | Authenticated / administrator, custodian or technician for POST |
 | PUT | `/api/maintenance/:id` | Administrator, custodian or technician |
+| GET / POST | `/api/users` | Administrator only |
+| PUT | `/api/users/:id` | Administrator only |
 | POST | `/api/heartbeat` | Shared agent secret |
 
 Send `Authorization: Bearer <token>` for authenticated routes. The login response returns the token once; keep it private. The heartbeat endpoint uses `X-CLAMMS-SECRET`, not a user session.
 
-Write APIs accept JSON. Asset status values: `working`, `needs_repair`, `under_maintenance`, `retired`, `missing`. Maintenance status values: `open`, `in_progress`, `resolved`, `cancelled`.
+Write APIs accept JSON. Asset status values: `working`, `needs_repair`, `under_maintenance`, `retired`, `missing`. Maintenance status values: `open`, `in_progress`, `resolved`, `cancelled`. User roles: `administrator`, `custodian`, `technician`, `viewer`. User creation and password changes require a password of at least 12 characters. User updates must explicitly send `is_active`.
 
 ## Heartbeat request
 

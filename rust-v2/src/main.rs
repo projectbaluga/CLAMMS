@@ -341,7 +341,7 @@ async fn update_user(
     if id<=0 || full.is_empty() || full.len()>150 || username.is_empty() || username.len()>80 || !valid_role(&input.role) {
         return Err(api_error(StatusCode::BAD_REQUEST,"User details or role are invalid"));
     }
-    let active=input.is_active.unwrap_or(true) as i64;
+    let active=input.is_active.ok_or_else(||api_error(StatusCode::BAD_REQUEST,"is_active is required when updating a user"))? as i64;
     if let Some(password)=input.password.as_deref() {
         let hash=password_hash(password)?;
         sqlx::query("UPDATE users SET full_name=?,username=?,role=?,is_active=?,password_hash=? WHERE id=?")

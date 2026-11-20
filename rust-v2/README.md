@@ -51,9 +51,10 @@ This branch is an actively developed Rust V2 implementation and is not yet a pro
 - Asset create/update APIs with status validation (administrator and custodian); use status `retired` rather than hard-deleting inventory
 - Maintenance list/create/update APIs (administrator, custodian and technician)
 - Administrator-only user listing, creation, role changes, activation/deactivation and password reset; password changes revoke that user's active sessions
-- Browser dashboard at `/` with login, inventory, laboratory, maintenance, monitoring-history and administrator user views
+- Browser dashboard at `/` with login, inventory, laboratory, maintenance, monitoring-history, audit history and administrator user views
 - Separate Rust Windows monitoring agent under `agent/`, configured per workstation with its asset tag and server secret
-- Audit trail table for management operations
+- Audit trail table with actor attribution for management operations
+- Administrator-only audit history API and dashboard view
 - Windows CI workflow for formatting, compilation, linting, tests and downloadable build artifacts
 
 Still outstanding: tested backup/restore workflow, stronger audit attribution, rate limiting, session expiry cleanup, automated API/database integration tests, installer/service packaging, and deployment hardening. Dashboard forms and agent are implemented but still need real Windows build and pilot validation. Role checks currently distinguish inventory and maintenance writes; they are not yet a complete school-specific authorization policy. Do not use this build for production or irreplaceable asset data until the outstanding controls and successful Windows build/test validation are complete.

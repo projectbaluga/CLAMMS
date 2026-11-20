@@ -56,6 +56,7 @@ struct LoginResponse {
 
 #[derive(Serialize)]
 struct CurrentUser {
+    id: i64,
     username: String,
     full_name: String,
     role: String,
@@ -224,12 +225,12 @@ async fn authenticated_user(
 ) -> Result<CurrentUser, (StatusCode, Json<ApiMessage>)> {
     let token = bearer_token(headers)?;
     let hash = hex::encode(Sha256::digest(token.as_bytes()));
-    sqlx::query_as::<_, (String, String, String)>(
-        "SELECT u.username, u.full_name, u.role FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > CURRENT_TIMESTAMP AND u.is_active = 1"
+    sqlx::query_as::<_, (i64, String, String, String)>(
+        "SELECT u.id, u.username, u.full_name, u.role FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > CURRENT_TIMESTAMP AND u.is_active = 1"
     )
     .bind(hash).fetch_optional(db).await
     .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Could not verify session"))?
-    .map(|(username, full_name, role)| CurrentUser { username, full_name, role })
+    .map(|(id, username, full_name, role)| CurrentUser { id, username, full_name, role })
     .ok_or_else(|| api_error(StatusCode::UNAUTHORIZED, "Login required or session expired"))
 }
 
@@ -322,7 +323,7 @@ async fn create_user(
         .bind(full).bind(username).bind(hash).bind(&input.role).bind(input.is_active.unwrap_or(true) as i64)
         .execute(&state.db).await;
     match r {
-        Ok(r) => { write_audit(&state.db,"create","user",Some(r.last_insert_rowid()),username).await;
+        Ok(r) => { write_audit(&state.db,user.id,"create","user",Some(r.last_insert_rowid()),username).await;
             Ok((StatusCode::CREATED,Json(ApiMessage{status:"ok",message:"User created"}))) }
         Err(_) => Err(api_error(StatusCode::CONFLICT,"Username is already in use or user data is invalid")),
     }
@@ -350,7 +351,7 @@ async fn update_user(
             .bind(full).bind(username).bind(&input.role).bind(active).bind(id)
             .execute(&state.db).await.map_err(|_|api_error(StatusCode::CONFLICT,"Could not update user; username may be in use"))?;
     }
-    write_audit(&state.db,"update","user",Some(id),username).await;
+    write_audit(&state.db,actor.id,"update","user",Some(id),username).await;
     Ok(Json(ApiMessage{status:"ok",message:"User updated; active sessions revoked when password changed"}))
 }
 
@@ -402,9 +403,9 @@ fn valid_maintenance_status(value: &str) -> bool {
     matches!(value, "open" | "in_progress" | "resolved" | "cancelled")
 }
 
-async fn write_audit(db: &SqlitePool, action: &str, entity: &str, id: Option<i64>, details: &str) {
-    let _ = sqlx::query("INSERT INTO audit_logs (action, entity_type, entity_id, details) VALUES (?, ?, ?, ?)")
-        .bind(action).bind(entity).bind(id.map(|v| v.to_string())).bind(details)
+async fn write_audit(db: &SqlitePool, actor_id: i64, action: &str, entity: &str, id: Option<i64>, details: &str) {
+    let _ = sqlx::query("INSERT INTO audit_logs (user_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)")
+        .bind(actor_id).bind(action).bind(entity).bind(id.map(|v| v.to_string())).bind(details)
         .execute(db).await;
 }
 
@@ -420,7 +421,7 @@ async fn create_laboratory(
     let result=sqlx::query("INSERT INTO laboratories (code,name,location,description) VALUES (?,?,?,?)")
         .bind(code).bind(name).bind(input.location).bind(input.description).execute(&state.db).await;
     match result {
-        Ok(r) => { write_audit(&state.db,"create","laboratory",Some(r.last_insert_rowid()),code).await;
+        Ok(r) => { write_audit(&state.db,user.id,"create","laboratory",Some(r.last_insert_rowid()),code).await;
             Ok((StatusCode::CREATED,Json(ApiMessage{status:"ok",message:"Laboratory created"}))) }
         Err(_) => Err(api_error(StatusCode::CONFLICT,"Laboratory code already exists or data is invalid")),
     }
@@ -439,7 +440,7 @@ async fn update_laboratory(
         .bind(code).bind(name).bind(input.location).bind(input.description).bind(id).execute(&state.db).await
         .map_err(|_|api_error(StatusCode::CONFLICT,"Could not update laboratory; code may already exist"))?;
     if r.rows_affected()==0 { return Err(api_error(StatusCode::NOT_FOUND,"Laboratory not found")); }
-    write_audit(&state.db,"update","laboratory",Some(id),code).await;
+    write_audit(&state.db,user.id,"update","laboratory",Some(id),code).await;
     Ok(Json(ApiMessage{status:"ok",message:"Laboratory updated"}))
 }
 
@@ -458,7 +459,7 @@ async fn create_asset(
         .bind(input.serial_number).bind(input.hostname).bind(input.ip_address).bind(status)
         .bind(input.purchase_date).bind(input.warranty_end).bind(input.notes).execute(&state.db).await;
     match r {
-        Ok(r) => { write_audit(&state.db,"create","asset",Some(r.last_insert_rowid()),tag).await;
+        Ok(r) => { write_audit(&state.db,user.id,"create","asset",Some(r.last_insert_rowid()),tag).await;
             Ok((StatusCode::CREATED,Json(ApiMessage{status:"ok",message:"Asset created"}))) }
         Err(_) => Err(api_error(StatusCode::CONFLICT,"Asset tag is already used or referenced data is invalid")),
     }
@@ -479,7 +480,7 @@ async fn update_asset(
         .bind(input.purchase_date).bind(input.warranty_end).bind(input.notes).bind(id).execute(&state.db).await
         .map_err(|_|api_error(StatusCode::CONFLICT,"Could not update asset; tag may already exist"))?;
     if r.rows_affected()==0 { return Err(api_error(StatusCode::NOT_FOUND,"Asset not found")); }
-    write_audit(&state.db,"update","asset",Some(id),tag).await;
+    write_audit(&state.db,user.id,"update","asset",Some(id),tag).await;
     Ok(Json(ApiMessage{status:"ok",message:"Asset updated"}))
 }
 
@@ -505,7 +506,7 @@ async fn create_maintenance(
     let r=sqlx::query("INSERT INTO maintenance_logs (asset_id,issue,action_taken,status) VALUES (?,?,?,?)")
         .bind(input.asset_id).bind(issue).bind(input.action_taken).bind(status).execute(&state.db).await;
     match r {
-        Ok(r) => { write_audit(&state.db,"create","maintenance",Some(r.last_insert_rowid()),issue).await;
+        Ok(r) => { write_audit(&state.db,user.id,"create","maintenance",Some(r.last_insert_rowid()),issue).await;
             Ok((StatusCode::CREATED,Json(ApiMessage{status:"ok",message:"Maintenance record created"}))) }
         Err(_) => Err(api_error(StatusCode::BAD_REQUEST,"Asset does not exist or maintenance data is invalid")),
     }
@@ -528,7 +529,7 @@ async fn update_maintenance(
             .bind(input.asset_id).bind(issue).bind(input.action_taken).bind(status).bind(id).execute(&state.db).await
     }.map_err(|_|api_error(StatusCode::BAD_REQUEST,"Could not update maintenance record"))?;
     if r.rows_affected()==0 { return Err(api_error(StatusCode::NOT_FOUND,"Maintenance record not found")); }
-    write_audit(&state.db,"update","maintenance",Some(id),status).await;
+    write_audit(&state.db,user.id,"update","maintenance",Some(id),status).await;
     Ok(Json(ApiMessage{status:"ok",message:"Maintenance record updated"}))
 }
 

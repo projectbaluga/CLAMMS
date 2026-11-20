@@ -1080,10 +1080,18 @@ async fn download_database_backup(
         ));
     }
     let backup_dir = Path::new("data/backups");
-    std::fs::create_dir_all(backup_dir).map_err(|_| {
+    std::fs::create_dir_all(backup_dir).map_err(|err| {
+        error!("Could not prepare backup directory: {err}");
         api_error(
             StatusCode::INTERNAL_SERVER_ERROR,
             "Could not prepare backup directory",
+        )
+    })?;
+    let backup_dir = std::fs::canonicalize(backup_dir).map_err(|err| {
+        error!("Could not resolve backup directory: {err}");
+        api_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Could not resolve backup directory",
         )
     })?;
     let stamp = std::time::SystemTime::now()
@@ -1105,7 +1113,8 @@ async fn download_database_backup(
     }
     let bytes_result = std::fs::read(&backup_path);
     let _ = std::fs::remove_file(&backup_path);
-    let bytes = bytes_result.map_err(|_| {
+    let bytes = bytes_result.map_err(|err| {
+        error!("Could not read database backup at {}: {err}", backup_path.display());
         api_error(
             StatusCode::INTERNAL_SERVER_ERROR,
             "Could not read database backup",

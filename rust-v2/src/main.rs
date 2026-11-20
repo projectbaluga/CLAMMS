@@ -1,8 +1,8 @@
 use axum::{
-    extract::State,
+    extract::{Path, State},
     http::{HeaderMap, StatusCode},
     response::Html,
-    routing::{get, post},
+    routing::{get, post, put},
     Json, Router,
 };
 use argon2::{
@@ -110,7 +110,12 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/auth/me", get(me))
         .route("/api/auth/logout", post(logout))
         .route("/api/laboratories", get(list_laboratories))
-        .route("/api/assets", get(list_assets))
+        .route("/api/assets", get(list_assets).post(create_asset))
+        .route("/api/assets/:id", put(update_asset))
+        .route("/api/laboratories", get(list_laboratories).post(create_laboratory))
+        .route("/api/laboratories/:id", put(update_laboratory))
+        .route("/api/maintenance", get(list_maintenance).post(create_maintenance))
+        .route("/api/maintenance/:id", put(update_maintenance))
         .route("/api/heartbeat", post(heartbeat))
         .with_state(state)
         .layer(TraceLayer::new_for_http());
@@ -265,6 +270,186 @@ async fn list_assets(
     ).fetch_all(&state.db).await
         .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Could not load assets"))?;
     Ok(Json(rows))
+}
+
+
+#[derive(Deserialize)]
+struct LaboratoryInput {
+    code: String,
+    name: String,
+    location: Option<String>,
+    description: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct AssetInput {
+    asset_tag: String,
+    laboratory_id: i64,
+    category_id: Option<i64>,
+    brand: Option<String>,
+    model: Option<String>,
+    serial_number: Option<String>,
+    hostname: Option<String>,
+    ip_address: Option<String>,
+    status: Option<String>,
+    purchase_date: Option<String>,
+    warranty_end: Option<String>,
+    notes: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct MaintenanceInput {
+    asset_id: i64,
+    issue: String,
+    action_taken: Option<String>,
+    status: Option<String>,
+}
+
+fn can_manage_inventory(role: &str) -> bool {
+    matches!(role, "administrator" | "custodian")
+}
+
+fn can_manage_maintenance(role: &str) -> bool {
+    matches!(role, "administrator" | "custodian" | "technician")
+}
+
+fn valid_asset_status(value: &str) -> bool {
+    matches!(value, "working" | "needs_repair" | "under_maintenance" | "retired" | "missing")
+}
+
+fn valid_maintenance_status(value: &str) -> bool {
+    matches!(value, "open" | "in_progress" | "resolved" | "cancelled")
+}
+
+async fn write_audit(db: &SqlitePool, action: &str, entity: &str, id: Option<i64>, details: &str) {
+    let _ = sqlx::query("INSERT INTO audit_logs (action, entity_type, entity_id, details) VALUES (?, ?, ?, ?)")
+        .bind(action).bind(entity).bind(id.map(|v| v.to_string())).bind(details)
+        .execute(db).await;
+}
+
+async fn create_laboratory(
+    State(state): State<AppState>, headers: HeaderMap, Json(input): Json<LaboratoryInput>,
+) -> Result<(StatusCode, Json<ApiMessage>), (StatusCode, Json<ApiMessage>)> {
+    let user = authenticated_user(&state.db, &headers).await?;
+    if !can_manage_inventory(&user.role) { return Err(api_error(StatusCode::FORBIDDEN, "Insufficient permissions")); }
+    let code=input.code.trim(); let name=input.name.trim();
+    if code.is_empty() || code.len()>30 || name.is_empty() || name.len()>150 {
+        return Err(api_error(StatusCode::BAD_REQUEST, "Laboratory code or name is invalid"));
+    }
+    let result=sqlx::query("INSERT INTO laboratories (code,name,location,description) VALUES (?,?,?,?)")
+        .bind(code).bind(name).bind(input.location).bind(input.description).execute(&state.db).await;
+    match result {
+        Ok(r) => { write_audit(&state.db,"create","laboratory",Some(r.last_insert_rowid()),code).await;
+            Ok((StatusCode::CREATED,Json(ApiMessage{status:"ok",message:"Laboratory created"}))) }
+        Err(_) => Err(api_error(StatusCode::CONFLICT,"Laboratory code already exists or data is invalid")),
+    }
+}
+
+async fn update_laboratory(
+    State(state): State<AppState>, headers: HeaderMap, Path(id): Path<i64>, Json(input): Json<LaboratoryInput>,
+) -> Result<Json<ApiMessage>, (StatusCode, Json<ApiMessage>)> {
+    let user=authenticated_user(&state.db,&headers).await?;
+    if !can_manage_inventory(&user.role) { return Err(api_error(StatusCode::FORBIDDEN,"Insufficient permissions")); }
+    let code=input.code.trim(); let name=input.name.trim();
+    if id<=0 || code.is_empty() || code.len()>30 || name.is_empty() || name.len()>150 {
+        return Err(api_error(StatusCode::BAD_REQUEST,"Laboratory fields are invalid"));
+    }
+    let r=sqlx::query("UPDATE laboratories SET code=?,name=?,location=?,description=? WHERE id=?")
+        .bind(code).bind(name).bind(input.location).bind(input.description).bind(id).execute(&state.db).await
+        .map_err(|_|api_error(StatusCode::CONFLICT,"Could not update laboratory; code may already exist"))?;
+    if r.rows_affected()==0 { return Err(api_error(StatusCode::NOT_FOUND,"Laboratory not found")); }
+    write_audit(&state.db,"update","laboratory",Some(id),code).await;
+    Ok(Json(ApiMessage{status:"ok",message:"Laboratory updated"}))
+}
+
+async fn create_asset(
+    State(state): State<AppState>, headers: HeaderMap, Json(input): Json<AssetInput>,
+) -> Result<(StatusCode, Json<ApiMessage>), (StatusCode, Json<ApiMessage>)> {
+    let user=authenticated_user(&state.db,&headers).await?;
+    if !can_manage_inventory(&user.role) { return Err(api_error(StatusCode::FORBIDDEN,"Insufficient permissions")); }
+    let tag=input.asset_tag.trim();
+    let status=input.status.as_deref().unwrap_or("working");
+    if tag.is_empty() || tag.len()>100 || input.laboratory_id<=0 || !valid_asset_status(status) {
+        return Err(api_error(StatusCode::BAD_REQUEST,"Asset tag, laboratory or status is invalid"));
+    }
+    let r=sqlx::query("INSERT INTO assets (asset_tag,laboratory_id,category_id,brand,model,serial_number,hostname,ip_address,status,purchase_date,warranty_end,notes) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)")
+        .bind(tag).bind(input.laboratory_id).bind(input.category_id).bind(input.brand).bind(input.model)
+        .bind(input.serial_number).bind(input.hostname).bind(input.ip_address).bind(status)
+        .bind(input.purchase_date).bind(input.warranty_end).bind(input.notes).execute(&state.db).await;
+    match r {
+        Ok(r) => { write_audit(&state.db,"create","asset",Some(r.last_insert_rowid()),tag).await;
+            Ok((StatusCode::CREATED,Json(ApiMessage{status:"ok",message:"Asset created"}))) }
+        Err(_) => Err(api_error(StatusCode::CONFLICT,"Asset tag is already used or referenced data is invalid")),
+    }
+}
+
+async fn update_asset(
+    State(state): State<AppState>, headers: HeaderMap, Path(id): Path<i64>, Json(input): Json<AssetInput>,
+) -> Result<Json<ApiMessage>, (StatusCode, Json<ApiMessage>)> {
+    let user=authenticated_user(&state.db,&headers).await?;
+    if !can_manage_inventory(&user.role) { return Err(api_error(StatusCode::FORBIDDEN,"Insufficient permissions")); }
+    let tag=input.asset_tag.trim(); let status=input.status.as_deref().unwrap_or("working");
+    if id<=0 || tag.is_empty() || tag.len()>100 || input.laboratory_id<=0 || !valid_asset_status(status) {
+        return Err(api_error(StatusCode::BAD_REQUEST,"Asset fields are invalid"));
+    }
+    let r=sqlx::query("UPDATE assets SET asset_tag=?,laboratory_id=?,category_id=?,brand=?,model=?,serial_number=?,hostname=?,ip_address=?,status=?,purchase_date=?,warranty_end=?,notes=?,updated_at=CURRENT_TIMESTAMP WHERE id=?")
+        .bind(tag).bind(input.laboratory_id).bind(input.category_id).bind(input.brand).bind(input.model)
+        .bind(input.serial_number).bind(input.hostname).bind(input.ip_address).bind(status)
+        .bind(input.purchase_date).bind(input.warranty_end).bind(input.notes).bind(id).execute(&state.db).await
+        .map_err(|_|api_error(StatusCode::CONFLICT,"Could not update asset; tag may already exist"))?;
+    if r.rows_affected()==0 { return Err(api_error(StatusCode::NOT_FOUND,"Asset not found")); }
+    write_audit(&state.db,"update","asset",Some(id),tag).await;
+    Ok(Json(ApiMessage{status:"ok",message:"Asset updated"}))
+}
+
+async fn list_maintenance(
+    State(state): State<AppState>, headers: HeaderMap,
+) -> Result<Json<Vec<(i64,i64,String,Option<String>,String,String)>>, (StatusCode,Json<ApiMessage>)> {
+    authenticated_user(&state.db,&headers).await?;
+    let rows=sqlx::query_as::<_,(i64,i64,String,Option<String>,String,String)>(
+        "SELECT id,asset_id,issue,action_taken,status,reported_at FROM maintenance_logs ORDER BY reported_at DESC LIMIT 500"
+    ).fetch_all(&state.db).await.map_err(|_|api_error(StatusCode::INTERNAL_SERVER_ERROR,"Could not load maintenance records"))?;
+    Ok(Json(rows))
+}
+
+async fn create_maintenance(
+    State(state): State<AppState>, headers: HeaderMap, Json(input): Json<MaintenanceInput>,
+) -> Result<(StatusCode,Json<ApiMessage>),(StatusCode,Json<ApiMessage>)> {
+    let user=authenticated_user(&state.db,&headers).await?;
+    if !can_manage_maintenance(&user.role) { return Err(api_error(StatusCode::FORBIDDEN,"Insufficient permissions")); }
+    let issue=input.issue.trim(); let status=input.status.as_deref().unwrap_or("open");
+    if input.asset_id<=0 || issue.is_empty() || issue.len()>4000 || !valid_maintenance_status(status) {
+        return Err(api_error(StatusCode::BAD_REQUEST,"Maintenance details are invalid"));
+    }
+    let r=sqlx::query("INSERT INTO maintenance_logs (asset_id,issue,action_taken,status) VALUES (?,?,?,?)")
+        .bind(input.asset_id).bind(issue).bind(input.action_taken).bind(status).execute(&state.db).await;
+    match r {
+        Ok(r) => { write_audit(&state.db,"create","maintenance",Some(r.last_insert_rowid()),issue).await;
+            Ok((StatusCode::CREATED,Json(ApiMessage{status:"ok",message:"Maintenance record created"}))) }
+        Err(_) => Err(api_error(StatusCode::BAD_REQUEST,"Asset does not exist or maintenance data is invalid")),
+    }
+}
+
+async fn update_maintenance(
+    State(state): State<AppState>, headers: HeaderMap, Path(id): Path<i64>, Json(input): Json<MaintenanceInput>,
+) -> Result<Json<ApiMessage>,(StatusCode,Json<ApiMessage>)> {
+    let user=authenticated_user(&state.db,&headers).await?;
+    if !can_manage_maintenance(&user.role) { return Err(api_error(StatusCode::FORBIDDEN,"Insufficient permissions")); }
+    let issue=input.issue.trim(); let status=input.status.as_deref().unwrap_or("open");
+    if id<=0 || input.asset_id<=0 || issue.is_empty() || issue.len()>4000 || !valid_maintenance_status(status) {
+        return Err(api_error(StatusCode::BAD_REQUEST,"Maintenance details are invalid"));
+    }
+    let resolved=if status=="resolved" { Some("CURRENT_TIMESTAMP") } else { None };
+    let r=if resolved.is_some() {
+        sqlx::query("UPDATE maintenance_logs SET asset_id=?,issue=?,action_taken=?,status=?,resolved_at=CURRENT_TIMESTAMP WHERE id=?")
+            .bind(input.asset_id).bind(issue).bind(input.action_taken).bind(status).bind(id).execute(&state.db).await
+    } else {
+        sqlx::query("UPDATE maintenance_logs SET asset_id=?,issue=?,action_taken=?,status=?,resolved_at=NULL WHERE id=?")
+            .bind(input.asset_id).bind(issue).bind(input.action_taken).bind(status).bind(id).execute(&state.db).await
+    }.map_err(|_|api_error(StatusCode::BAD_REQUEST,"Could not update maintenance record"))?;
+    if r.rows_affected()==0 { return Err(api_error(StatusCode::NOT_FOUND,"Maintenance record not found")); }
+    write_audit(&state.db,"update","maintenance",Some(id),status).await;
+    Ok(Json(ApiMessage{status:"ok",message:"Maintenance record updated"}))
 }
 
 async fn heartbeat(

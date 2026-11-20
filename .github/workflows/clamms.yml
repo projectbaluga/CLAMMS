@@ -1,15 +1,15 @@
-name: CLAMMS Rust V2
+name: CLAMMS
 
 on:
   push:
-    branches: [rust-v2]
+    branches: [main]
     paths:
-      - 'rust-v2/**'
+      - 'Cargo.toml','Cargo.lock','src/**','static/**','agent/**','migrations/**','*.ps1'
       - '.github/workflows/clamms-rust-v2.yml'
   pull_request:
     branches: [rust-v2]
     paths:
-      - 'rust-v2/**'
+      - 'Cargo.toml','Cargo.lock','src/**','static/**','agent/**','migrations/**','*.ps1'
       - '.github/workflows/clamms-rust-v2.yml'
 
 concurrency:
@@ -21,7 +21,7 @@ jobs:
     runs-on: windows-latest
     defaults:
       run:
-        working-directory: rust-v2
+        working-directory: .
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -76,8 +76,8 @@ jobs:
         with:
           name: clamms-windows-x64
           path: |
-            rust-v2/target/release/clamms-server.exe
-            rust-v2/agent/target/release/clamms-agent.exe
-            rust-v2/clamms-windows-x64.zip
+            target/release/clamms-server.exe
+            agent/target/release/clamms-agent.exe
+            clamms-windows-x64.zip
           if-no-files-found: error
           retention-days: 14

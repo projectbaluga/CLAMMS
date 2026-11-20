@@ -6,6 +6,9 @@ description = "CLAMMS Rust V2 local laboratory asset and maintenance server"
 
 [dependencies]
 anyhow = "1"
+argon2 = "0.5"
+dotenvy = "0.15"
+sha2 = "0.10"
 dotenvy = "0.15"
 axum = { version = "0.8", features = ["json", "macros"] }
 serde = { version = "1", features = ["derive"] }

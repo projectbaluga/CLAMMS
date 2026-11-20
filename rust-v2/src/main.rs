@@ -624,9 +624,10 @@ async fn download_database_backup(
         let _ = std::fs::remove_file(&backup_path);
         return Err(api_error(StatusCode::INTERNAL_SERVER_ERROR, "Could not create consistent database backup"));
     }
-    let bytes = std::fs::read(&backup_path)
-        .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Could not read database backup"))?;
+    let bytes_result = std::fs::read(&backup_path);
     let _ = std::fs::remove_file(&backup_path);
+    let bytes = bytes_result
+        .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Could not read database backup"))?;
     write_audit(&state.db, actor.id, "backup", "database", None, "Database backup downloaded").await;
     Ok(([
         (header::CONTENT_TYPE, "application/vnd.sqlite3"),

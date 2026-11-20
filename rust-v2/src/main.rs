@@ -146,8 +146,12 @@ async fn bootstrap_admin(db: &SqlitePool) -> anyhow::Result<()> {
             return Ok(());
         }
     };
-    let salt = SaltString::encode_b64(Uuid::new_v4().as_bytes())?;
-    let hash = Argon2::default().hash_password(password.as_bytes(), &salt)?.to_string();
+    let salt = SaltString::encode_b64(Uuid::new_v4().as_bytes())
+        .map_err(|err| anyhow::anyhow!("Could not encode bootstrap password salt: {err}"))?;
+    let hash = Argon2::default()
+        .hash_password(password.as_bytes(), &salt)
+        .map_err(|err| anyhow::anyhow!("Could not hash bootstrap administrator password: {err}"))?
+        .to_string();
     sqlx::query("INSERT INTO users (full_name, username, password_hash, role) VALUES (?, ?, ?, 'administrator')")
         .bind("CLAMMS Administrator").bind(username.trim()).bind(hash)
         .execute(db).await?;

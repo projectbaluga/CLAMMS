@@ -11,6 +11,8 @@ if (-not (Test-Path $ServerExe)) { throw "Server executable not found: $ServerEx
 New-Item -ItemType Directory -Force -Path $BackupDirectory | Out-Null
 $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
 $wasRunning = $null -ne $task -and $task.State -eq "Running"
+$serverProcess = Get-Process -Name "clamms-server" -ErrorAction SilentlyContinue
+if ($null -ne $serverProcess -and -not $wasRunning) { throw "Server process is running outside the expected scheduled task; stop it before backing up." }
 $destination = Join-Path $BackupDirectory ("clamms-" + (Get-Date -Format "yyyyMMdd-HHmmss") + ".db")
 try {
     if ($wasRunning) {

@@ -23,6 +23,9 @@ try {
             $state = (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue).State
         } while ($state -eq "Running" -and (Get-Date) -lt $deadline)
         if ($state -eq "Running") { throw "Server task did not stop; backup was cancelled." }
+        $processDeadline = (Get-Date).AddSeconds(30)
+        while ((Get-Process -Name "clamms-server" -ErrorAction SilentlyContinue) -and (Get-Date) -lt $processDeadline) { Start-Sleep -Milliseconds 500 }
+        if (Get-Process -Name "clamms-server" -ErrorAction SilentlyContinue) { throw "CLAMMS server process is still running; operation cancelled." }
     }
     Copy-Item $DatabasePath $destination
     & $ServerExe --check-db $destination

@@ -1087,13 +1087,8 @@ async fn download_database_backup(
             "Could not prepare backup directory",
         )
     })?;
-    let backup_dir = std::fs::canonicalize(backup_dir).map_err(|err| {
-        error!("Could not resolve backup directory: {err}");
-        api_error(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Could not resolve backup directory",
-        )
-    })?;
+    // Keep this path relative: Windows canonicalize() may return an extended
+    // `\\?\\` path, which SQLite's file API does not reliably accept.
     let stamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
@@ -1104,7 +1099,8 @@ async fn download_database_backup(
         .bind(&backup_name)
         .execute(&state.db)
         .await;
-    if result.is_err() {
+    if let Err(err) = result {
+        error!("Could not create database backup at {}: {err}", backup_path.display());
         let _ = std::fs::remove_file(&backup_path);
         return Err(api_error(
             StatusCode::INTERNAL_SERVER_ERROR,

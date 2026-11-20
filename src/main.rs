@@ -1108,7 +1108,7 @@ async fn download_database_backup(
     // plus UUID), and embedded quotes are escaped before constructing SQL.
     let escaped_backup_name = backup_name.replace('\'', "''");
     let vacuum_sql = format!("VACUUM INTO '{escaped_backup_name}'");
-    let result = sqlx::query(&vacuum_sql).execute(&state.db).await;
+    let result = sqlx::raw_sql(&vacuum_sql).execute(&state.db).await;
     if let Err(err) = result {
         error!(
             "Could not create database backup at {}: {err}",

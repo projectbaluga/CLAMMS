@@ -1545,6 +1545,87 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn expired_sessions_and_deactivated_accounts_are_rejected() {
+        let state = test_state().await;
+        let headers = login_headers(&state, "admin-test").await;
+        let token = bearer_token(&headers).expect("bearer token");
+        let token_hash = hex::encode(Sha256::digest(token.as_bytes()));
+
+        sqlx::query("UPDATE sessions SET expires_at = '2000-01-01 00:00:00' WHERE token_hash = ?")
+            .bind(&token_hash)
+            .execute(&state.db)
+            .await
+            .expect("expire session");
+
+        assert_eq!(
+            authenticated_user(&state.db, &headers)
+                .await
+                .expect_err("expired session rejected")
+                .0,
+            StatusCode::UNAUTHORIZED
+        );
+
+        let active_headers = login_headers(&state, "admin-test").await;
+        sqlx::query("UPDATE users SET is_active = 0 WHERE username = 'admin-test'")
+            .execute(&state.db)
+            .await
+            .expect("deactivate administrator");
+
+        assert_eq!(
+            authenticated_user(&state.db, &active_headers)
+                .await
+                .expect_err("deactivated user session rejected")
+                .0,
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(
+            login(
+                State(state),
+                Json(LoginRequest {
+                    username: "admin-test".to_string(),
+                    password: "correct-horse-battery-staple".to_string(),
+                }),
+            )
+            .await
+            .expect_err("deactivated account cannot log in")
+            .0,
+            StatusCode::UNAUTHORIZED
+        );
+    }
+
+    #[tokio::test]
+    async fn database_backup_is_admin_only_and_contains_sqlite_data() {
+        let state = test_state().await;
+        let admin = login_headers(&state, "admin-test").await;
+        let viewer = login_headers(&state, "viewer-test").await;
+
+        assert_eq!(
+            download_database_backup(State(state.clone()), viewer)
+                .await
+                .expect_err("viewer cannot download database backup")
+                .0,
+            StatusCode::FORBIDDEN
+        );
+
+        let response = download_database_backup(State(state), admin)
+            .await
+            .expect("administrator backup succeeds");
+        assert_eq!(
+            response.headers()[header::CONTENT_TYPE],
+            "application/vnd.sqlite3"
+        );
+        assert_eq!(
+            response.headers()[header::CACHE_CONTROL],
+            "no-store"
+        );
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("read backup response body");
+        assert!(bytes.starts_with(b"SQLite format 3\\0"));
+        assert!(bytes.len() > 100);
+    }
+
     #[test]
     fn role_permissions_are_restricted() {
         assert!(can_manage_inventory("administrator"));

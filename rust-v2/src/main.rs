@@ -593,8 +593,21 @@ async fn heartbeat(
         return Err(api_error(StatusCode::UNAUTHORIZED, "Unauthorized agent"));
     }
     let asset_tag = payload.asset_tag.trim();
-    if asset_tag.is_empty() || asset_tag.len() > 100 {
-        return Err(api_error(StatusCode::BAD_REQUEST, "Invalid asset tag"));
+    if asset_tag.is_empty() || asset_tag.len() > 100
+        || payload.cpu_percent.is_some_and(|v| !v.is_finite() || !(0.0..=100.0).contains(&v))
+        || payload.memory_percent.is_some_and(|v| !v.is_finite() || !(0.0..=100.0).contains(&v))
+        || payload.disk_free_bytes.is_some_and(|v| v < 0)
+        || payload.uptime_seconds.is_some_and(|v| v < 0)
+        || payload.hostname.as_deref().is_some_and(|v| v.len() > 255)
+        || payload.os_version.as_deref().is_some_and(|v| v.len() > 255)
+    {
+        return Err(api_error(StatusCode::BAD_REQUEST, "Invalid heartbeat values"));
+    }
+    let known_asset: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM assets WHERE asset_tag = ?")
+        .bind(asset_tag).fetch_one(&state.db).await
+        .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Could not validate asset tag"))?;
+    if known_asset == 0 {
+        return Err(api_error(StatusCode::NOT_FOUND, "Asset tag is not registered in CLAMMS"));
     }
     let result = sqlx::query(
         "INSERT INTO monitoring_logs (asset_tag, hostname, os_version, cpu_percent, memory_percent, disk_free_bytes, uptime_seconds, received_at) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"

@@ -127,22 +127,22 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/auth/me", get(me))
         .route("/api/auth/logout", post(logout))
         .route("/api/assets", get(list_assets).post(create_asset))
-        .route("/api/assets/:id", put(update_asset))
+        .route("/api/assets/{id}", put(update_asset))
         .route(
             "/api/laboratories",
             get(list_laboratories).post(create_laboratory),
         )
-        .route("/api/laboratories/:id", put(update_laboratory))
+        .route("/api/laboratories/{id}", put(update_laboratory))
         .route(
             "/api/maintenance",
             get(list_maintenance).post(create_maintenance),
         )
-        .route("/api/maintenance/:id", put(update_maintenance))
+        .route("/api/maintenance/{id}", put(update_maintenance))
         .route("/api/monitoring", get(list_monitoring))
         .route("/api/reports/assets.csv", get(export_assets_csv))
         .route("/api/reports/maintenance.csv", get(export_maintenance_csv))
         .route("/api/users", get(list_users).post(create_user))
-        .route("/api/users/:id", put(update_user))
+        .route("/api/users/{id}", put(update_user))
         .route("/api/audit", get(list_audit))
         .route("/api/admin/backup", get(download_database_backup))
         .route("/api/heartbeat", post(heartbeat))
@@ -447,8 +447,7 @@ async fn list_users(
         "SELECT id,full_name,username,role,is_active FROM users ORDER BY full_name",
     )
     .fetch_all(&state.db)
-    .await
-    .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Could not load users"))?;
+    .await    .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Could not load users"))?;
     Ok(Json(rows))
 }
 
@@ -897,8 +896,7 @@ async fn create_maintenance(
                 &state.db,
                 user.id,
                 "create",
-                "maintenance",
-                Some(r.last_insert_rowid()),
+                "maintenance",                Some(r.last_insert_rowid()),
                 issue,
             )
             .await;
@@ -1347,8 +1345,7 @@ mod tests {
         let mut headers = HeaderMap::new();
         headers.insert(
             header::AUTHORIZATION,
-            HeaderValue::from_str(&format!("Bearer {}", response.0.token))
-                .expect("valid bearer header"),
+            HeaderValue::from_str(&format!("Bearer {}", response.0.token))                .expect("valid bearer header"),
         );
         headers
     }

@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path as AxumPath, State},
     http::{HeaderMap, StatusCode},
     response::Html,
     routing::{get, post, put},
@@ -333,7 +333,7 @@ async fn create_user(
 }
 
 async fn update_user(
-    State(state): State<AppState>, headers: HeaderMap, Path(id): Path<i64>, Json(input): Json<UserInput>,
+    State(state): State<AppState>, headers: HeaderMap, AxumPath(id): AxumPath<i64>, Json(input): Json<UserInput>,
 ) -> Result<Json<ApiMessage>,(StatusCode,Json<ApiMessage>)> {
     let actor=authenticated_user(&state.db,&headers).await?;
     if actor.role!="administrator" { return Err(api_error(StatusCode::FORBIDDEN,"Administrator role required")); }

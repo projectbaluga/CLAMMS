@@ -1279,22 +1279,26 @@ mod tests {
             .await
             .expect("apply migrations");
         let hash = password_hash("correct-horse-battery-staple").expect("hash password");
-        sqlx::query("INSERT INTO users (full_name, username, password_hash, role) VALUES (?, ?, ?, ?)")
-            .bind("Test Administrator")
-            .bind("admin-test")
-            .bind(&hash)
-            .bind("administrator")
-            .execute(&db)
-            .await
-            .expect("insert administrator");
-        sqlx::query("INSERT INTO users (full_name, username, password_hash, role) VALUES (?, ?, ?, ?)")
-            .bind("Test Viewer")
-            .bind(&hash)
-            .bind("viewer-test")
-            .bind("viewer")
-            .execute(&db)
-            .await
-            .expect("insert viewer");
+        sqlx::query(
+            "INSERT INTO users (full_name, username, password_hash, role) VALUES (?, ?, ?, ?)",
+        )
+        .bind("Test Administrator")
+        .bind("admin-test")
+        .bind(&hash)
+        .bind("administrator")
+        .execute(&db)
+        .await
+        .expect("insert administrator");
+        sqlx::query(
+            "INSERT INTO users (full_name, username, password_hash, role) VALUES (?, ?, ?, ?)",
+        )
+        .bind("Test Viewer")
+        .bind("viewer-test")
+        .bind(&hash)
+        .bind("viewer")
+        .execute(&db)
+        .await
+        .expect("insert viewer");
         AppState {
             db,
             agent_secret: "test-agent-secret-that-is-at-least-32-bytes".to_string(),
@@ -1368,7 +1372,7 @@ mod tests {
         assert_eq!(assets.0.len(), 1);
         let asset_id = assets.0[0].0;
 
-        update_asset(
+        let _ = update_asset(
             State(state.clone()),
             admin.clone(),
             AxumPath(asset_id),
@@ -1397,7 +1401,7 @@ mod tests {
         assert_eq!(maintenance.0.len(), 1);
         let maintenance_id = maintenance.0[0].0;
 
-        update_maintenance(
+        let _ = update_maintenance(
             State(state.clone()),
             admin.clone(),
             AxumPath(maintenance_id),
@@ -1444,14 +1448,20 @@ mod tests {
         let asset_csv = export_assets_csv(State(state.clone()), admin.clone())
             .await
             .expect("export assets");
-        assert_eq!(asset_csv.headers()[header::CONTENT_TYPE], "text/csv; charset=utf-8");
+        assert_eq!(
+            asset_csv.headers()[header::CONTENT_TYPE],
+            "text/csv; charset=utf-8"
+        );
 
         let maintenance_csv = export_maintenance_csv(State(state.clone()), admin.clone())
             .await
             .expect("export maintenance");
-        assert_eq!(maintenance_csv.headers()[header::CONTENT_TYPE], "text/csv; charset=utf-8");
+        assert_eq!(
+            maintenance_csv.headers()[header::CONTENT_TYPE],
+            "text/csv; charset=utf-8"
+        );
 
-        logout(State(state.clone()), admin.clone())
+        let _ = logout(State(state.clone()), admin.clone())
             .await
             .expect("logout");
         assert_eq!(

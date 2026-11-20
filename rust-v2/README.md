@@ -9,7 +9,7 @@ Rust-based Windows-hosted rebuild of the Computer Laboratory Asset & Maintenance
 - The server stores data in a local SQLite database at `data/clamms.db`.
 - Users access the dashboard through a browser over the school LAN.
 - Remote users connect through an approved VPN (for example, Tailscale or WireGuard).
-- Each monitored workstation will run a separate `clamms-agent.exe`.
+
 
 Do not expose port 8080 or the SQLite database directly to the public internet. Restrict Windows Firewall access to the school LAN and VPN interface. Use unique credentials and protect the agent secret.
 
@@ -54,9 +54,9 @@ This branch is an actively developed Rust V2 implementation and is not yet a pro
 - Browser dashboard at `/` with login, inventory, laboratory, maintenance, monitoring-history and administrator user views
 - Separate Rust Windows monitoring agent under `agent/`, configured per workstation with its asset tag and server secret
 - Audit trail table for management operations
-- Windows CI workflow for formatting, checking, linting and tests
+- Windows CI workflow for formatting, compilation, linting, tests and downloadable build artifacts
 
-Still outstanding: report/export generation, tested backup/restore workflow, stronger audit attribution, rate limiting, session expiry cleanup, automated API/database integration tests, installer/service packaging, and deployment hardening. Dashboard forms and agent are implemented but still need real Windows build and pilot validation. Role checks currently distinguish inventory and maintenance writes; they are not yet a complete school-specific authorization policy. Do not use this build for production or irreplaceable asset data until the outstanding controls and successful Windows build/test validation are complete.
+Still outstanding: tested backup/restore workflow, stronger audit attribution, rate limiting, session expiry cleanup, automated API/database integration tests, installer/service packaging, and deployment hardening. Dashboard forms and agent are implemented but still need real Windows build and pilot validation. Role checks currently distinguish inventory and maintenance writes; they are not yet a complete school-specific authorization policy. Do not use this build for production or irreplaceable asset data until the outstanding controls and successful Windows build/test validation are complete.
 
 ## API routes currently implemented
 
@@ -112,7 +112,7 @@ X-CLAMMS-SECRET: <same secret configured on server and agent>
 - Configure regular, tested backups of the SQLite database. Back up using SQLite's online backup mechanism or while the server is stopped; do not simply copy a live database file without accounting for WAL files.
 - Configure Windows Firewall to allow port 8080 only from trusted LAN/VPN networks.
 - Remote access should be through VPN, not direct port forwarding.
-- The server and agent binaries have not yet been built or tested on a Windows host.
+- The server and agent binaries are built by CI when the workflow succeeds; they still require a successful run and a real Windows pilot before production use.
 
 ## Browser dashboard
 
@@ -131,3 +131,8 @@ cargo build --release
 ```
 
 Pilot on one workstation first. Create its asset record in the dashboard before configuring the agent. Then verify that new entries appear in Monitoring. Deploy to the other workstations only after validating network reachability, telemetry and Windows startup behavior.
+
+
+## Windows CI artifacts
+
+When the `CLAMMS Rust V2` workflow completes successfully, it publishes a `clamms-windows-x64` artifact containing `clamms-server.exe` and `clamms-agent.exe` for 14 days. A green workflow run is required before treating those binaries as usable builds.

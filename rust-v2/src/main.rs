@@ -115,6 +115,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/laboratories/:id", put(update_laboratory))
         .route("/api/maintenance", get(list_maintenance).post(create_maintenance))
         .route("/api/maintenance/:id", put(update_maintenance))
+        .route("/api/monitoring", get(list_monitoring))
         .route("/api/users", get(list_users).post(create_user))
         .route("/api/users/:id", put(update_user))
         .route("/api/heartbeat", post(heartbeat))
@@ -523,6 +524,17 @@ async fn update_maintenance(
     if r.rows_affected()==0 { return Err(api_error(StatusCode::NOT_FOUND,"Maintenance record not found")); }
     write_audit(&state.db,"update","maintenance",Some(id),status).await;
     Ok(Json(ApiMessage{status:"ok",message:"Maintenance record updated"}))
+}
+
+async fn list_monitoring(
+    State(state): State<AppState>, headers: HeaderMap,
+) -> Result<Json<Vec<(i64,String,Option<String>,Option<String>,Option<f32>,Option<f32>,Option<i64>,Option<i64>,String)>>,(StatusCode,Json<ApiMessage>)> {
+    authenticated_user(&state.db,&headers).await?;
+    let rows=sqlx::query_as::<_,(i64,String,Option<String>,Option<String>,Option<f32>,Option<f32>,Option<i64>,Option<i64>,String)>(
+        "SELECT id,asset_tag,hostname,os_version,cpu_percent,memory_percent,disk_free_bytes,uptime_seconds,received_at FROM monitoring_logs ORDER BY received_at DESC LIMIT 500"
+    ).fetch_all(&state.db).await
+        .map_err(|_|api_error(StatusCode::INTERNAL_SERVER_ERROR,"Could not load monitoring records"))?;
+    Ok(Json(rows))
 }
 
 async fn heartbeat(

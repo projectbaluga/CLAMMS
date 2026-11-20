@@ -26,6 +26,9 @@ if ($wasRunning) {
         $state = (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue).State
     } while ($state -eq "Running" -and (Get-Date) -lt $deadline)
     if ($state -eq "Running") { throw "Server task did not stop; no restore was performed." }
+    $processDeadline = (Get-Date).AddSeconds(30)
+    while ((Get-Process -Name "clamms-server" -ErrorAction SilentlyContinue) -and (Get-Date) -lt $processDeadline) { Start-Sleep -Milliseconds 500 }
+    if (Get-Process -Name "clamms-server" -ErrorAction SilentlyContinue) { throw "CLAMMS server process is still running; restore cancelled." }
 }
 
 $dataDir = Split-Path $db -Parent

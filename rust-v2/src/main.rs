@@ -121,6 +121,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/reports/maintenance.csv", get(export_maintenance_csv))
         .route("/api/users", get(list_users).post(create_user))
         .route("/api/users/:id", put(update_user))
+        .route("/api/audit", get(list_audit))
         .route("/api/heartbeat", post(heartbeat))
         .with_state(state)
         .layer(TraceLayer::new_for_http());
@@ -574,6 +575,18 @@ async fn export_maintenance_csv(
         csv.push_str("\r\n");
     }
     Ok(([(header::CONTENT_TYPE,"text/csv; charset=utf-8"),(header::CONTENT_DISPOSITION,"attachment; filename=clamms-maintenance.csv")],csv).into_response())
+}
+
+async fn list_audit(
+    State(state): State<AppState>, headers: HeaderMap,
+) -> Result<Json<Vec<(i64,Option<String>,String,String,Option<String>,Option<String>,String)>>,(StatusCode,Json<ApiMessage>)> {
+    let actor=authenticated_user(&state.db,&headers).await?;
+    if actor.role!="administrator" { return Err(api_error(StatusCode::FORBIDDEN,"Administrator role required")); }
+    let rows=sqlx::query_as::<_,(i64,Option<String>,String,String,Option<String>,Option<String>,String)>(
+        "SELECT a.id,u.full_name,a.action,a.entity_type,a.entity_id,a.details,a.created_at FROM audit_logs a LEFT JOIN users u ON u.id=a.user_id ORDER BY a.created_at DESC,a.id DESC LIMIT 500"
+    ).fetch_all(&state.db).await
+        .map_err(|_|api_error(StatusCode::INTERNAL_SERVER_ERROR,"Could not load audit records"))?;
+    Ok(Json(rows))
 }
 
 async fn list_monitoring(

@@ -1263,6 +1263,275 @@ async fn heartbeat(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::http::HeaderValue;
+    use sqlx::sqlite::SqlitePoolOptions;
+
+    async fn test_state() -> AppState {
+        let db = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("in-memory database");
+        sqlx::migrate!("./migrations")
+            .run(&db)
+            .await
+            .expect("apply migrations");
+        let hash = password_hash("correct-horse-battery-staple").expect("hash password");
+        sqlx::query("INSERT INTO users (full_name, username, password_hash, role) VALUES (?, ?, ?, ?)")
+            .bind("Test Administrator")
+            .bind("admin-test")
+            .bind(&hash)
+            .bind("administrator")
+            .execute(&db)
+            .await
+            .expect("insert administrator");
+        sqlx::query("INSERT INTO users (full_name, username, password_hash, role) VALUES (?, ?, ?, ?)")
+            .bind("Test Viewer")
+            .bind(&hash)
+            .bind("viewer-test")
+            .bind("viewer")
+            .execute(&db)
+            .await
+            .expect("insert viewer");
+        AppState {
+            db,
+            agent_secret: "test-agent-secret-that-is-at-least-32-bytes".to_string(),
+        }
+    }
+
+    async fn login_headers(state: &AppState, username: &str) -> HeaderMap {
+        let response = login(
+            State(state.clone()),
+            Json(LoginRequest {
+                username: username.to_string(),
+                password: "correct-horse-battery-staple".to_string(),
+            }),
+        )
+        .await
+        .expect("login succeeds");
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::AUTHORIZATION,
+            HeaderValue::from_str(&format!("Bearer {}", response.0.token))
+                .expect("valid bearer header"),
+        );
+        headers
+    }
+
+    fn sample_asset(tag: &str, lab_id: i64) -> AssetInput {
+        AssetInput {
+            asset_tag: tag.to_string(),
+            laboratory_id: lab_id,
+            category_id: None,
+            brand: Some("Test brand".to_string()),
+            model: Some("Test model".to_string()),
+            serial_number: None,
+            hostname: Some("test-host".to_string()),
+            ip_address: None,
+            status: Some("working".to_string()),
+            purchase_date: None,
+            warranty_end: None,
+            notes: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn api_workflow_covers_auth_inventory_maintenance_and_monitoring() {
+        let state = test_state().await;
+        let admin = login_headers(&state, "admin-test").await;
+
+        let current = me(State(state.clone()), admin.clone())
+            .await
+            .expect("authenticated user");
+        assert_eq!(current.0.role, "administrator");
+
+        let labs = list_laboratories(State(state.clone()), admin.clone())
+            .await
+            .expect("seeded laboratories");
+        assert!(!labs.0.is_empty());
+        let lab_id = labs.0[0].0;
+
+        let (asset_status, _) = create_asset(
+            State(state.clone()),
+            admin.clone(),
+            Json(sample_asset("TEST-PC-001", lab_id)),
+        )
+        .await
+        .expect("create asset");
+        assert_eq!(asset_status, StatusCode::CREATED);
+
+        let assets = list_assets(State(state.clone()), admin.clone())
+            .await
+            .expect("list assets");
+        assert_eq!(assets.0.len(), 1);
+        let asset_id = assets.0[0].0;
+
+        update_asset(
+            State(state.clone()),
+            admin.clone(),
+            AxumPath(asset_id),
+            Json(sample_asset("TEST-PC-001", lab_id)),
+        )
+        .await
+        .expect("update asset");
+
+        let (maintenance_status, _) = create_maintenance(
+            State(state.clone()),
+            admin.clone(),
+            Json(MaintenanceInput {
+                asset_id,
+                issue: "Test keyboard issue".to_string(),
+                action_taken: None,
+                status: None,
+            }),
+        )
+        .await
+        .expect("create maintenance record");
+        assert_eq!(maintenance_status, StatusCode::CREATED);
+
+        let maintenance = list_maintenance(State(state.clone()), admin.clone())
+            .await
+            .expect("list maintenance");
+        assert_eq!(maintenance.0.len(), 1);
+        let maintenance_id = maintenance.0[0].0;
+
+        update_maintenance(
+            State(state.clone()),
+            admin.clone(),
+            AxumPath(maintenance_id),
+            Json(MaintenanceInput {
+                asset_id,
+                issue: "Test keyboard issue".to_string(),
+                action_taken: Some("Replaced keyboard".to_string()),
+                status: Some("resolved".to_string()),
+            }),
+        )
+        .await
+        .expect("resolve maintenance record");
+
+        let (heartbeat_status, _) = heartbeat(
+            State(state.clone()),
+            {
+                let mut headers = HeaderMap::new();
+                headers.insert(
+                    "x-clamms-secret",
+                    HeaderValue::from_static("test-agent-secret-that-is-at-least-32-bytes"),
+                );
+                headers
+            },
+            Json(HeartbeatRequest {
+                asset_tag: "TEST-PC-001".to_string(),
+                hostname: Some("test-host".to_string()),
+                os_version: Some("Windows test".to_string()),
+                cpu_percent: Some(23.5),
+                memory_percent: Some(41.0),
+                disk_free_bytes: Some(10_000),
+                uptime_seconds: Some(3_600),
+            }),
+        )
+        .await
+        .expect("accept heartbeat");
+        assert_eq!(heartbeat_status, StatusCode::ACCEPTED);
+
+        let monitoring = list_monitoring(State(state.clone()), admin.clone())
+            .await
+            .expect("list monitoring");
+        assert_eq!(monitoring.0.len(), 1);
+        assert_eq!(monitoring.0[0].1, "TEST-PC-001");
+
+        let asset_csv = export_assets_csv(State(state.clone()), admin.clone())
+            .await
+            .expect("export assets");
+        assert_eq!(asset_csv.headers()[header::CONTENT_TYPE], "text/csv; charset=utf-8");
+
+        let maintenance_csv = export_maintenance_csv(State(state.clone()), admin.clone())
+            .await
+            .expect("export maintenance");
+        assert_eq!(maintenance_csv.headers()[header::CONTENT_TYPE], "text/csv; charset=utf-8");
+
+        logout(State(state.clone()), admin.clone())
+            .await
+            .expect("logout");
+        assert_eq!(
+            me(State(state.clone()), admin)
+                .await
+                .expect_err("logged-out session rejected")
+                .0,
+            StatusCode::UNAUTHORIZED
+        );
+    }
+
+    #[tokio::test]
+    async fn api_rejects_unauthorized_roles_and_invalid_agent_heartbeats() {
+        let state = test_state().await;
+        let viewer = login_headers(&state, "viewer-test").await;
+        assert_eq!(
+            list_users(State(state.clone()), viewer.clone())
+                .await
+                .expect_err("viewer cannot list users")
+                .0,
+            StatusCode::FORBIDDEN
+        );
+
+        let labs = list_laboratories(State(state.clone()), viewer.clone())
+            .await
+            .expect("viewer can read laboratories");
+        let denied = create_asset(
+            State(state.clone()),
+            viewer.clone(),
+            Json(sample_asset("DENIED-PC", labs.0[0].0)),
+        )
+        .await
+        .expect_err("viewer cannot create assets");
+        assert_eq!(denied.0, StatusCode::FORBIDDEN);
+
+        let mut bad_secret = HeaderMap::new();
+        bad_secret.insert("x-clamms-secret", HeaderValue::from_static("wrong-secret"));
+        assert_eq!(
+            heartbeat(
+                State(state.clone()),
+                bad_secret,
+                Json(HeartbeatRequest {
+                    asset_tag: "ANY-PC".to_string(),
+                    hostname: None,
+                    os_version: None,
+                    cpu_percent: None,
+                    memory_percent: None,
+                    disk_free_bytes: None,
+                    uptime_seconds: None,
+                }),
+            )
+            .await
+            .expect_err("reject wrong agent secret")
+            .0,
+            StatusCode::UNAUTHORIZED
+        );
+
+        let mut valid_secret = HeaderMap::new();
+        valid_secret.insert(
+            "x-clamms-secret",
+            HeaderValue::from_static("test-agent-secret-that-is-at-least-32-bytes"),
+        );
+        assert_eq!(
+            heartbeat(
+                State(state),
+                valid_secret,
+                Json(HeartbeatRequest {
+                    asset_tag: "UNREGISTERED-PC".to_string(),
+                    hostname: None,
+                    os_version: None,
+                    cpu_percent: Some(101.0),
+                    memory_percent: None,
+                    disk_free_bytes: None,
+                    uptime_seconds: None,
+                }),
+            )
+            .await
+            .expect_err("reject out-of-range telemetry")
+            .0,
+            StatusCode::BAD_REQUEST
+        );
+    }
 
     #[test]
     fn role_permissions_are_restricted() {

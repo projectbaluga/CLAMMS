@@ -77,6 +77,8 @@ All routes below except health and heartbeat require a bearer token where noted.
 | GET / POST | `/api/users` | Administrator only |
 | PUT | `/api/users/:id` | Administrator only |
 | GET | `/api/monitoring` | Authenticated |
+| GET | `/api/reports/assets.csv` | Authenticated CSV export |
+| GET | `/api/reports/maintenance.csv` | Authenticated CSV export |
 | POST | `/api/heartbeat` | Shared agent secret |
 
 Send `Authorization: Bearer <token>` for authenticated routes. The login response returns the token once; keep it private. The heartbeat endpoint uses `X-CLAMMS-SECRET`, not a user session.
@@ -114,7 +116,7 @@ X-CLAMMS-SECRET: <same secret configured on server and agent>
 
 ## Browser dashboard
 
-Open `http://127.0.0.1:8080/` and sign in using the administrator account configured during bootstrap. The dashboard provides read views and role-gated create/update forms for assets, laboratories, maintenance records, and users. The monitoring tab displays received heartbeat history. It currently does not provide CSV/PDF exports or a full alerting workflow.
+Open `http://127.0.0.1:8080/` and sign in using the administrator account configured during bootstrap. The dashboard provides read views and role-gated create/update forms for assets, laboratories, maintenance records, and users. The monitoring tab displays received heartbeat history. Inventory and maintenance views provide CSV exports; CSV values are quoted and formula-like prefixes are neutralized. PDF exports and a full alerting workflow are not included yet.
 
 ## Build the workstation agent
 

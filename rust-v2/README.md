@@ -157,6 +157,8 @@ For an agent, build in `agent\` with `cargo build --release`, run `agent\install
 
 The CLI integrity check is `clamms-server.exe --check-db "C:\path\to\clamms.db"`. It opens the file read-only and runs SQLite `PRAGMA integrity_check`.
 
+Para sa sunod-sunod na deployment, one-PC pilot, manual inventory checklist, acceptance tests at rollback steps, tingnan ang [PILOT-GUIDE-TL.md](PILOT-GUIDE-TL.md).
+
 ## Windows CI artifacts
 
 When the `CLAMMS Rust V2` workflow completes successfully, it publishes a `clamms-windows-x64` artifact containing `clamms-server.exe` and `clamms-agent.exe` for 14 days. A green workflow run is required before treating those binaries as usable builds.

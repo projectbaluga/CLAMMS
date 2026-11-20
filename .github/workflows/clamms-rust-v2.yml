@@ -61,6 +61,16 @@ jobs:
         run: cargo build --release
       - name: Build agent executable
         run: cargo build --release --manifest-path agent/Cargo.toml
+      - name: Package Windows deployment bundle
+        shell: pwsh
+        run: |
+          $bundle = Join-Path $env:RUNNER_TEMP "clamms-windows-x64"
+          New-Item -ItemType Directory -Force -Path "$bundle\server","$bundle\agent" | Out-Null
+          Copy-Item "target\release\clamms-server.exe" "$bundle\server\"
+          Copy-Item ".env.example","install-server.ps1","uninstall-server.ps1","backup-database.ps1","restore-database.ps1" "$bundle\server\"
+          Copy-Item "agent\target\release\clamms-agent.exe" "$bundle\agent\"
+          Copy-Item "agent\.env.example","agent\install-agent.ps1","agent\uninstall-agent.ps1" "$bundle\agent\"
+          Compress-Archive -Path "$bundle\*" -DestinationPath "clamms-windows-x64.zip" -Force
       - name: Upload Windows executables
         uses: actions/upload-artifact@v4
         with:
@@ -68,5 +78,6 @@ jobs:
           path: |
             rust-v2/target/release/clamms-server.exe
             rust-v2/agent/target/release/clamms-agent.exe
+            rust-v2/clamms-windows-x64.zip
           if-no-files-found: error
           retention-days: 14

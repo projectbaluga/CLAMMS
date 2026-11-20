@@ -431,7 +431,7 @@ async fn create_laboratory(
 }
 
 async fn update_laboratory(
-    State(state): State<AppState>, headers: HeaderMap, Path(id): Path<i64>, Json(input): Json<LaboratoryInput>,
+    State(state): State<AppState>, headers: HeaderMap, AxumPath(id): AxumPath<i64>, Json(input): Json<LaboratoryInput>,
 ) -> Result<Json<ApiMessage>, (StatusCode, Json<ApiMessage>)> {
     let user=authenticated_user(&state.db,&headers).await?;
     if !can_manage_inventory(&user.role) { return Err(api_error(StatusCode::FORBIDDEN,"Insufficient permissions")); }
@@ -469,7 +469,7 @@ async fn create_asset(
 }
 
 async fn update_asset(
-    State(state): State<AppState>, headers: HeaderMap, Path(id): Path<i64>, Json(input): Json<AssetInput>,
+    State(state): State<AppState>, headers: HeaderMap, AxumPath(id): AxumPath<i64>, Json(input): Json<AssetInput>,
 ) -> Result<Json<ApiMessage>, (StatusCode, Json<ApiMessage>)> {
     let user=authenticated_user(&state.db,&headers).await?;
     if !can_manage_inventory(&user.role) { return Err(api_error(StatusCode::FORBIDDEN,"Insufficient permissions")); }
@@ -516,7 +516,7 @@ async fn create_maintenance(
 }
 
 async fn update_maintenance(
-    State(state): State<AppState>, headers: HeaderMap, Path(id): Path<i64>, Json(input): Json<MaintenanceInput>,
+    State(state): State<AppState>, headers: HeaderMap, AxumPath(id): AxumPath<i64>, Json(input): Json<MaintenanceInput>,
 ) -> Result<Json<ApiMessage>,(StatusCode,Json<ApiMessage>)> {
     let user=authenticated_user(&state.db,&headers).await?;
     if !can_manage_maintenance(&user.role) { return Err(api_error(StatusCode::FORBIDDEN,"Insufficient permissions")); }

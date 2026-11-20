@@ -64,6 +64,13 @@ struct CurrentUser {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let args: Vec<String> = env::args().collect();
+    if args.get(1).is_some_and(|arg| arg == "--check-db") {
+        let database_path = args.get(2).ok_or_else(|| anyhow::anyhow!("Usage: clamms-server --check-db <database-path>"))?;
+        verify_database_integrity(database_path).await?;
+        println!("SQLite integrity check passed: {database_path}");
+        return Ok(());
+    }
     dotenvy::dotenv().ok();
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -130,6 +137,23 @@ async fn main() -> anyhow::Result<()> {
     info!("CLAMMS Rust V2 listening on http://{bind}");
     let listener = tokio::net::TcpListener::bind(bind).await?;
     axum::serve(listener, app).await?;
+    Ok(())
+}
+
+async fn verify_database_integrity(database_path: &str) -> anyhow::Result<()> {
+    let options = sqlx::sqlite::SqliteConnectOptions::new()
+        .filename(database_path)
+        .read_only(true)
+        .foreign_keys(true);
+    let db = SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect_with(options)
+        .await?;
+    let result: String = sqlx::query_scalar("PRAGMA integrity_check")
+        .fetch_one(&db)
+        .await?;
+    db.close().await;
+    anyhow::ensure!(result == "ok", "SQLite integrity check failed: {result}");
     Ok(())
 }
 

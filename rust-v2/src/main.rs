@@ -1,7 +1,7 @@
 use axum::{
     extract::{Path as AxumPath, State},
-    http::{HeaderMap, StatusCode},
-    response::Html,
+    http::{header, HeaderMap, StatusCode},
+    response::{Html, IntoResponse, Response},
     routing::{get, post, put},
     Json, Router,
 };
@@ -116,6 +116,8 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/maintenance", get(list_maintenance).post(create_maintenance))
         .route("/api/maintenance/:id", put(update_maintenance))
         .route("/api/monitoring", get(list_monitoring))
+        .route("/api/reports/assets.csv", get(export_assets_csv))
+        .route("/api/reports/maintenance.csv", get(export_maintenance_csv))
         .route("/api/users", get(list_users).post(create_user))
         .route("/api/users/:id", put(update_user))
         .route("/api/heartbeat", post(heartbeat))
@@ -524,6 +526,49 @@ async fn update_maintenance(
     if r.rows_affected()==0 { return Err(api_error(StatusCode::NOT_FOUND,"Maintenance record not found")); }
     write_audit(&state.db,"update","maintenance",Some(id),status).await;
     Ok(Json(ApiMessage{status:"ok",message:"Maintenance record updated"}))
+}
+
+fn csv_cell(value: &str) -> String {
+    let safe = if value.starts_with(['=', '+', '-', '@', '\\t', '\\r']) {
+        format!("'{}", value)
+    } else {
+        value.to_string()
+    };
+    format!("\\"{}\\"", safe.replace('"', "\\"\\""))
+}
+
+async fn export_assets_csv(
+    State(state): State<AppState>, headers: HeaderMap,
+) -> Result<Response, (StatusCode, Json<ApiMessage>)> {
+    authenticated_user(&state.db, &headers).await?;
+    let rows=sqlx::query_as::<_,(i64,String,String,i64,Option<String>,Option<String>,String)>(
+        "SELECT a.id,a.asset_tag,l.code,a.laboratory_id,a.brand,a.model,a.status FROM assets a JOIN laboratories l ON l.id=a.laboratory_id ORDER BY l.code,a.asset_tag"
+    ).fetch_all(&state.db).await
+        .map_err(|_|api_error(StatusCode::INTERNAL_SERVER_ERROR,"Could not generate asset report"))?;
+    let mut csv=String::from("id,asset_tag,laboratory_code,laboratory_id,brand,model,status\\r\\n");
+    for row in rows {
+        let cells=[row.0.to_string(),row.1,row.2,row.3.to_string(),row.4.unwrap_or_default(),row.5.unwrap_or_default(),row.6];
+        csv.push_str(&cells.iter().map(|v|csv_cell(v)).collect::<Vec<_>>().join(","));
+        csv.push_str("\\r\\n");
+    }
+    Ok(([(header::CONTENT_TYPE,"text/csv; charset=utf-8"),(header::CONTENT_DISPOSITION,"attachment; filename=clamms-assets.csv")],csv).into_response())
+}
+
+async fn export_maintenance_csv(
+    State(state): State<AppState>, headers: HeaderMap,
+) -> Result<Response, (StatusCode, Json<ApiMessage>)> {
+    authenticated_user(&state.db, &headers).await?;
+    let rows=sqlx::query_as::<_,(i64,String,String,Option<String>,String,String,Option<String>)>(
+        "SELECT m.id,a.asset_tag,m.issue,m.action_taken,m.status,m.reported_at,m.resolved_at FROM maintenance_logs m JOIN assets a ON a.id=m.asset_id ORDER BY m.reported_at DESC"
+    ).fetch_all(&state.db).await
+        .map_err(|_|api_error(StatusCode::INTERNAL_SERVER_ERROR,"Could not generate maintenance report"))?;
+    let mut csv=String::from("id,asset_tag,issue,action_taken,status,reported_at,resolved_at\\r\\n");
+    for row in rows {
+        let cells=[row.0.to_string(),row.1,row.2,row.3.unwrap_or_default(),row.4,row.5,row.6.unwrap_or_default()];
+        csv.push_str(&cells.iter().map(|v|csv_cell(v)).collect::<Vec<_>>().join(","));
+        csv.push_str("\\r\\n");
+    }
+    Ok(([(header::CONTENT_TYPE,"text/csv; charset=utf-8"),(header::CONTENT_DISPOSITION,"attachment; filename=clamms-maintenance.csv")],csv).into_response())
 }
 
 async fn list_monitoring(

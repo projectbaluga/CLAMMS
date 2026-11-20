@@ -143,8 +143,8 @@ Build both executables first. Copy the server release executable into the server
 2. Copy the resulting `target\release\clamms-server.exe` into the same folder as `install-server.ps1` or adjust the script's source path.
 3. Run `install-server.ps1` from elevated PowerShell.
 4. Edit `C:\ProgramData\CLAMMS\Server\.env`; set a unique 32+ character agent secret and a unique administrator password of at least 12 characters.
-5. Start with `Start-ScheduledTask -TaskName "CLAMMS Server"`.
-6. Sign in at `http://127.0.0.1:8080` and remove the bootstrap password from the environment after the first administrator is created.
+4. Start with `Start-ScheduledTask -TaskName "CLAMMS Server"`.
+5. Sign in at `http://127.0.0.1:8080` and remove the bootstrap password from the environment after the first administrator is created.
 
 For an agent, build in `agent\` with `cargo build --release`, run `agent\install-agent.ps1` elevated, edit `C:\ProgramData\CLAMMS\Agent\.env` with the server URL, same agent secret and exact registered asset tag, then start `CLAMMS Workstation Monitoring Agent`. Repeat only after the one-PC pilot succeeds. These are Task Scheduler startup tasks, not native Windows services. Uninstall scripts remove the tasks but intentionally preserve data and configuration.
 

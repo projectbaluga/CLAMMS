@@ -242,10 +242,10 @@ fn api_error(status: StatusCode, message: &'static str) -> (StatusCode, Json<Api
 async fn list_laboratories(
     State(state): State<AppState>,
     headers: HeaderMap,
-) -> Result<Json<Vec<(i64, String, String, Option<String>)>>, (StatusCode, Json<ApiMessage>)> {
+) -> Result<Json<Vec<(i64, String, String, Option<String>, Option<String>)>>, (StatusCode, Json<ApiMessage>)> {
     authenticated_user(&state.db, &headers).await?;
-    let rows = sqlx::query_as::<_, (i64, String, String, Option<String>)>(
-        "SELECT id, code, name, location FROM laboratories ORDER BY code"
+    let rows = sqlx::query_as::<_, (i64, String, String, Option<String>, Option<String>)>(
+        "SELECT id, code, name, location, description FROM laboratories ORDER BY code"
     ).fetch_all(&state.db).await
         .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Could not load laboratories"))?;
     Ok(Json(rows))
@@ -254,10 +254,10 @@ async fn list_laboratories(
 async fn list_assets(
     State(state): State<AppState>,
     headers: HeaderMap,
-) -> Result<Json<Vec<(i64, String, i64, Option<String>, Option<String>, String)>>, (StatusCode, Json<ApiMessage>)> {
+) -> Result<Json<Vec<(i64, String, i64, Option<String>, Option<String>, String, Option<i64>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>)>>, (StatusCode, Json<ApiMessage>)> {
     authenticated_user(&state.db, &headers).await?;
-    let rows = sqlx::query_as::<_, (i64, String, i64, Option<String>, Option<String>, String)>(
-        "SELECT id, asset_tag, laboratory_id, brand, model, status FROM assets ORDER BY asset_tag"
+    let rows = sqlx::query_as::<_, (i64, String, i64, Option<String>, Option<String>, String, Option<i64>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>)>(
+        "SELECT id, asset_tag, laboratory_id, brand, model, status, category_id, serial_number, hostname, ip_address, purchase_date, warranty_end, notes FROM assets ORDER BY asset_tag"
     ).fetch_all(&state.db).await
         .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Could not load assets"))?;
     Ok(Json(rows))

@@ -1649,7 +1649,7 @@ mod tests {
             StatusCode::FORBIDDEN
         );
 
-        let response = download_database_backup(State(state), admin)
+        let response = download_database_backup(State(state.clone()), admin)
             .await
             .expect("administrator backup succeeds");
         assert_eq!(

@@ -8,6 +8,7 @@ description = "CLAMMS Rust V2 local laboratory asset and maintenance server"
 anyhow = "1"
 argon2 = "0.5"
 dotenvy = "0.15"
+hex = "0.4"
 sha2 = "0.10"
 dotenvy = "0.15"
 axum = { version = "0.8", features = ["json", "macros"] }

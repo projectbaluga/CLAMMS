@@ -45,7 +45,10 @@ try {
 }
 catch {
     if (Test-Path $tempDb) { Remove-Item $tempDb -Force }
-    if ((-not (Test-Path $db)) -and (Test-Path $oldDb)) { Move-Item $oldDb $db -Force }
+    if (Test-Path $oldDb) {
+        if (Test-Path $db) { Remove-Item $db -Force }
+        Move-Item $oldDb $db -Force
+    }
     if ($wasRunning) { Start-ScheduledTask -TaskName $TaskName }
     throw
 }

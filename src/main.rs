@@ -1101,7 +1101,8 @@ async fn download_database_backup(
         .unwrap_or_default()
         .as_secs();
     let backup_path = backup_dir.join(format!("clamms-{stamp}-{}.db", Uuid::new_v4()));
-    let backup_name = backup_path.to_string_lossy().to_string();
+    // SQLite accepts forward-slash paths consistently on Windows; avoid mixed separators.
+    let backup_name = backup_path.to_string_lossy().replace('\\', "/");
     // SQLite's VACUUM INTO does not reliably materialize a bound path through
     // SQLx on Windows. The destination is generated locally (fixed directory
     // plus UUID), and embedded quotes are escaped before constructing SQL.

@@ -687,6 +687,13 @@ mod tests {
     }
 
     #[test]
+    fn csv_cells_escape_quotes_and_formula_prefixes() {
+        assert_eq!(csv_cell("plain"), "\"plain\"");
+        assert_eq!(csv_cell("a\"b"), "\"a\"\"b\"");
+        assert_eq!(csv_cell("=1+1"), "\"'=1+1\"");
+    }
+
+    #[test]
     fn user_roles_are_allowlisted() {
         for role in ["administrator", "custodian", "technician", "viewer"] {
             assert!(valid_role(role));

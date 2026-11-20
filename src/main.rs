@@ -973,9 +973,7 @@ fn csv_cell(value: &str) -> String {
         .trim_start_matches(|c: char| c.is_whitespace() || c == '\u{feff}')
         .chars()
         .next();
-    let safe = if first_non_whitespace
-        .is_some_and(|c| matches!(c, '=' | '+' | '-' | '@'))
-    {
+    let safe = if first_non_whitespace.is_some_and(|c| matches!(c, '=' | '+' | '-' | '@')) {
         format!("'{}", value)
     } else {
         value.to_string()
@@ -1109,7 +1107,10 @@ async fn download_database_backup(
         .execute(&state.db)
         .await;
     if let Err(err) = result {
-        error!("Could not create database backup at {}: {err}", backup_path.display());
+        error!(
+            "Could not create database backup at {}: {err}",
+            backup_path.display()
+        );
         let _ = std::fs::remove_file(&backup_path);
         return Err(api_error(
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -1119,7 +1120,11 @@ async fn download_database_backup(
     let bytes_result = std::fs::read(&backup_path);
     let _ = std::fs::remove_file(&backup_path);
     let bytes = bytes_result.map_err(|err| {
-        error!("Could not read database backup at {}: {err}", backup_path.display());
+        eprintln!("Could not read database backup at {}: {err}", backup_path.display());
+        error!(
+            "Could not read database backup at {}: {err}",
+            backup_path.display()
+        );
         api_error(
             StatusCode::INTERNAL_SERVER_ERROR,
             "Could not read database backup",
@@ -1629,10 +1634,7 @@ mod tests {
             response.headers()[header::CONTENT_TYPE],
             "application/vnd.sqlite3"
         );
-        assert_eq!(
-            response.headers()[header::CACHE_CONTROL],
-            "no-store"
-        );
+        assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
         let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
             .await
             .expect("read backup response body");

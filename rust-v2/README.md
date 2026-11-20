@@ -37,15 +37,44 @@ Open `http://127.0.0.1:8080` on the host PC. From a permitted school LAN client,
 
 ## Current implementation status
 
-This branch is the initial Rust V2 foundation, not a completed replacement for the PHP system yet. It currently includes:
+This branch is an actively developed Rust V2 implementation and is not yet a production replacement for the PHP system. Current implemented server capabilities include:
 
 - Axum/Tokio HTTP server
 - SQLite connection and SQLx migration runner
 - Initial schema for six labs, users, assets, categories, maintenance and monitoring
 - Health endpoint at `GET /api/health`
 - Secret-protected heartbeat endpoint at `POST /api/heartbeat`
+- Argon2 password verification, hashed bearer-token sessions, login/logout and current-user endpoint
+- Authenticated laboratory and asset inventory listing
+- Laboratory create/update APIs (administrator and custodian)
+- Asset create/update APIs with status validation (administrator and custodian); use status `retired` rather than hard-deleting inventory
+- Maintenance list/create/update APIs (administrator, custodian and technician)
+- Audit trail table for management operations
+- Windows CI workflow for formatting, checking, linting and tests
 
-Not implemented yet: role-specific authorization policies, user administration, complete CRUD screens/APIs, agent executable, reporting, backup/restore UI, and VPN provisioning. Login sessions are a foundation, not a complete security review. Do not use this starter build for production or real asset data until those controls and tests are completed.
+Still outstanding: user administration/password reset, a complete browser dashboard and forms, agent executable, reports/exports, backup/restore workflow, stronger audit attribution, CSRF strategy if cookie auth is introduced, rate limiting, session revocation/expiry cleanup, automated API/database tests, and deployment hardening. Role checks currently distinguish inventory and maintenance writes; they are not yet a complete school-specific authorization policy. Do not use this build for production or irreplaceable asset data until the outstanding controls and successful Windows build/test validation are complete.
+
+## API routes currently implemented
+
+All routes below except health and heartbeat require a bearer token where noted.
+
+| Method | Route | Access |
+|---|---|---|
+| GET | `/api/health` | Public |
+| POST | `/api/auth/login` | Public |
+| GET | `/api/auth/me` | Authenticated |
+| POST | `/api/auth/logout` | Authenticated |
+| GET / POST | `/api/laboratories` | Authenticated / administrator or custodian for POST |
+| PUT | `/api/laboratories/:id` | Administrator or custodian |
+| GET / POST | `/api/assets` | Authenticated / administrator or custodian for POST |
+| PUT | `/api/assets/:id` | Administrator or custodian |
+| GET / POST | `/api/maintenance` | Authenticated / administrator, custodian or technician for POST |
+| PUT | `/api/maintenance/:id` | Administrator, custodian or technician |
+| POST | `/api/heartbeat` | Shared agent secret |
+
+Send `Authorization: Bearer <token>` for authenticated routes. The login response returns the token once; keep it private. The heartbeat endpoint uses `X-CLAMMS-SECRET`, not a user session.
+
+Write APIs accept JSON. Asset status values: `working`, `needs_repair`, `under_maintenance`, `retired`, `missing`. Maintenance status values: `open`, `in_progress`, `resolved`, `cancelled`.
 
 ## Heartbeat request
 

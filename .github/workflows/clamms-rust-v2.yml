@@ -36,3 +36,16 @@ jobs:
         run: cargo check --manifest-path agent/Cargo.toml
       - name: Test Windows agent
         run: cargo test --manifest-path agent/Cargo.toml
+      - name: Build server executable
+        run: cargo build --release
+      - name: Build agent executable
+        run: cargo build --release --manifest-path agent/Cargo.toml
+      - name: Upload Windows executables
+        uses: actions/upload-artifact@v4
+        with:
+          name: clamms-windows-x64
+          path: |
+            rust-v2/target/release/clamms-server.exe
+            rust-v2/agent/target/release/clamms-agent.exe
+          if-no-files-found: error
+          retention-days: 14

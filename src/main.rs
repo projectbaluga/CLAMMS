@@ -969,10 +969,12 @@ async fn update_maintenance(
 }
 
 fn csv_cell(value: &str) -> String {
-    let safe = if value
+    let first_non_whitespace = value
+        .trim_start_matches(|c: char| c.is_whitespace() || c == '\u{feff}')
         .chars()
-        .next()
-        .is_some_and(|c| matches!(c, '=' | '+' | '-' | '@' | '\t' | '\r'))
+        .next();
+    let safe = if first_non_whitespace
+        .is_some_and(|c| matches!(c, '=' | '+' | '-' | '@'))
     {
         format!("'{}", value)
     } else {
@@ -1571,6 +1573,8 @@ mod tests {
         assert_eq!(csv_cell("plain"), "\"plain\"");
         assert_eq!(csv_cell("a\"b"), "\"a\"\"b\"");
         assert_eq!(csv_cell("=1+1"), "\"'=1+1\"");
+        assert_eq!(csv_cell("  =1+1"), "\"'  =1+1\"");
+        assert_eq!(csv_cell("\\t=1+1"), "\"'\\t=1+1\"");
     }
 
     #[test]

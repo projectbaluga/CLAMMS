@@ -57,7 +57,7 @@ This branch is an actively developed Rust V2 implementation and is not yet a pro
 - Administrator-only audit history API and dashboard view
 - Windows CI workflow for formatting, compilation, linting, tests and downloadable build artifacts
 
-Still outstanding: tested backup/restore workflow, stronger audit attribution, rate limiting, session expiry cleanup, automated API/database integration tests, installer/service packaging, and deployment hardening. Dashboard forms and agent are implemented but still need real Windows build and pilot validation. Role checks currently distinguish inventory and maintenance writes; they are not yet a complete school-specific authorization policy. Do not use this build for production or irreplaceable asset data until the outstanding controls and successful Windows build/test validation are complete.
+Still outstanding: rate limiting, session expiry cleanup, automated API/database integration tests, a full school-specific authorization review and a supervised Windows pilot. Backup/restore scripts and Task Scheduler installation scripts are now included, but they still require an operator-run recovery drill before production use. Dashboard forms and agent are implemented but still need real Windows build and pilot validation. Role checks currently distinguish inventory and maintenance writes; they are not yet a complete school-specific authorization policy. Do not use this build for production or irreplaceable asset data until the outstanding controls and successful Windows build/test validation are complete.
 
 ## API routes currently implemented
 
@@ -117,7 +117,7 @@ X-CLAMMS-SECRET: <same secret configured on server and agent>
 
 ## Browser dashboard
 
-Open `http://127.0.0.1:8080/` and sign in using the administrator account configured during bootstrap. The dashboard provides read views and role-gated create/update forms for assets, laboratories, maintenance records, and users. The monitoring tab displays received heartbeat history. Inventory and maintenance views provide CSV exports; CSV values are quoted and formula-like prefixes are neutralized. PDF exports and a full alerting workflow are not included yet.
+Open `http://127.0.0.1:8080/` and sign in using the administrator account configured during bootstrap. The dashboard provides read views and role-gated create/update forms for assets, laboratories, maintenance records, and users. The monitoring tab displays received heartbeat history. Administrators can view audit history and download a consistent SQLite backup from the dashboard. Inventory and maintenance views provide CSV exports; CSV values are quoted and formula-like prefixes are neutralized. PDF exports and a full alerting workflow are not included yet.
 
 ## Build the workstation agent
 
@@ -133,6 +133,29 @@ cargo build --release
 
 Pilot on one workstation first. Create its asset record in the dashboard before configuring the agent. Then verify that new entries appear in Monitoring. Deploy to the other workstations only after validating network reachability, telemetry and Windows startup behavior.
 
+
+
+## Windows startup installation
+
+Build both executables first. Copy the server release executable into the server project folder's expected build output and run `install-server.ps1` from an elevated PowerShell session. The script installs the executable under `C:\ProgramData\CLAMMS\Server`, creates a startup scheduled task running as SYSTEM, and restricts the install directory ACL to SYSTEM and local Administrators.
+
+1. Build the server: `cargo build --release`.
+2. Copy the resulting `target\release\clamms-server.exe` into the same folder as `install-server.ps1` or adjust the script's source path.
+3. Run `install-server.ps1` from elevated PowerShell.
+4. Edit `C:\ProgramData\CLAMMS\Server\.env`; set a unique 32+ character agent secret and a unique administrator password of at least 12 characters.
+5. Start with `Start-ScheduledTask -TaskName "CLAMMS Server"`.
+6. Sign in at `http://127.0.0.1:8080` and remove the bootstrap password from the environment after the first administrator is created.
+
+For an agent, build in `agent\` with `cargo build --release`, run `agent\install-agent.ps1` elevated, edit `C:\ProgramData\CLAMMS\Agent\.env` with the server URL, same agent secret and exact registered asset tag, then start `CLAMMS Workstation Monitoring Agent`. Repeat only after the one-PC pilot succeeds. These are Task Scheduler startup tasks, not native Windows services. Uninstall scripts remove the tasks but intentionally preserve data and configuration.
+
+## Backup and restore
+
+- The administrator dashboard's **Download DB backup** action calls `GET /api/admin/backup`, which uses SQLite `VACUUM INTO` to create a consistent snapshot while the server is running. Treat the downloaded file as highly confidential.
+- For a local offline backup, run `backup-database.ps1` elevated. It stops the server scheduled task if running, copies the database, checks it using `clamms-server.exe --check-db`, creates a SHA-256 checksum, and restarts the task.
+- To restore, run `restore-database.ps1 -BackupPath "C:\path\to\clamms-backup.db"` elevated. It checks the selected backup before stopping the server, makes a pre-restore copy, stages and checks the replacement, then restarts the task if it was running.
+- Keep at least one encrypted/off-device copy. A backup is not proven until a restore drill succeeds. Run a test restore to a separate copy or a non-production host before relying on this process.
+
+The CLI integrity check is `clamms-server.exe --check-db "C:\path\to\clamms.db"`. It opens the file read-only and runs SQLite `PRAGMA integrity_check`.
 
 ## Windows CI artifacts
 

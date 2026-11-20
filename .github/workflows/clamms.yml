@@ -24,6 +24,9 @@ on:
       - '*.ps1'
       - '.github/workflows/clamms.yml'
 
+permissions:
+  contents: write
+
 concurrency:
   group: clamms-${{ github.ref }}
   cancel-in-progress: true
@@ -53,8 +56,18 @@ jobs:
               exit 1
             }
           }
-      - name: Format Rust sources
-        run: cargo fmt --all -- --check
+      - name: Apply Rust formatting
+        run: cargo fmt --all
+      - name: Commit formatting fixes
+        shell: pwsh
+        run: |
+          if (git status --porcelain) {
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add src/main.rs
+            git commit -m "chore: format Rust sources"
+            git push
+          }
       - name: Compile
         run: cargo check
       - name: Run tests

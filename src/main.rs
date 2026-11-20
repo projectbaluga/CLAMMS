@@ -1087,8 +1087,17 @@ async fn download_database_backup(
             "Could not prepare backup directory",
         )
     })?;
-    // Keep this path relative: Windows canonicalize() may return an extended
-    // `\\?\\` path, which SQLite's file API does not reliably accept.
+    // Build a normal absolute path from current_dir. On Windows,
+    // canonicalize() can produce an extended `\\?\\` path that SQLite may reject.
+    let backup_dir = env::current_dir()
+        .map_err(|err| {
+            error!("Could not resolve working directory for database backup: {err}");
+            api_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Could not resolve backup directory",
+            )
+        })?
+        .join(backup_dir);
     let stamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()

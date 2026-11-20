@@ -529,7 +529,7 @@ async fn update_maintenance(
 }
 
 fn csv_cell(value: &str) -> String {
-    let safe = if value.starts_with(['=', '+', '-', '@', '\t', '\r']) {
+    let safe = if value.chars().next().is_some_and(|c| matches!(c, '=' | '+' | '-' | '@' | '\t' | '\r')) {
         format!("'{}", value)
     } else {
         value.to_string()

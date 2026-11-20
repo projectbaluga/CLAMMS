@@ -49,7 +49,7 @@ struct ApiMessage {
     message: &'static str,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 struct LoginResponse {
     token: String,
     username: String,
@@ -1622,7 +1622,7 @@ mod tests {
         let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
             .await
             .expect("read backup response body");
-        assert!(bytes.starts_with(b"SQLite format 3\\0"));
+        assert!(bytes.starts_with(b"SQLite format 3\0"));
         assert!(bytes.len() > 100);
     }
 
